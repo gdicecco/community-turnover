@@ -36,7 +36,7 @@ for(f in files) {
     routenos <- routes_tr@data[ , 1]
     
     for(i in 1:nrow(routes_tr@data)) {
-      rte <- subset(routes_tr, rteno == routenos[i])
+      rte <- subset(routes_tr, Province_R == routenos[i])
       rtenum <- routenos[i]
       
       for(i in 1:nrow(rte)){

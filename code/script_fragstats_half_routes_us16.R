@@ -6,7 +6,6 @@ library(raster)
 library(sp)
 library(rgdal)
 library(rgeos)
-library(stringr)
 library(SDMTools)
 
 # Read in BBS routes shapefile
@@ -15,7 +14,8 @@ library(SDMTools)
 setwd("/proj/hurlbertlab/nlcd_landcover/NLCD_2016_Land_Cover_L48_20190424/")
 nlcd <- raster("nlcd_2016_whole_simplified.tif")
 routes <- readOGR("/proj/hurlbertlab/gdicecco/nlcd_frag_proj_shapefiles/BBS_routepaths/us_bbs_half_route_paths_5km.shp")
-routes_tr <- spTransform(routes, crs(nlcd))
+routes_transf <- spTransform(routes, crs(nlcd))
+routes_tr <- crop(routes_transf, extent(zone_raster))
 
 routenos <- routes_tr@data[ , 1]
 

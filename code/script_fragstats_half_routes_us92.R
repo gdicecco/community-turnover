@@ -16,7 +16,7 @@ nlcd <- raster("nlcd_1992_whole_simplified.tif")
 routes <- readOGR("/proj/hurlbertlab/gdicecco/nlcd_frag_proj_shapefiles/BBS_routepaths/us_bbs_half_route_paths_5km.shp")
 routes_transf <- spTransform(routes, crs(nlcd))
 
-routes_tr <- routes_transf[routes_transf@data$rteno <= 4000 & routes_transf@data$rteno < 3000, ]
+routes_tr <- routes_transf[routes_transf@data$rteno <= 4000 | routes_transf@data$rteno < 3000, ]
 
 routenos <- routes_tr@data[ , 1]
 

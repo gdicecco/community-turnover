@@ -15,7 +15,8 @@ setwd("/proj/hurlbertlab/nlcd_landcover/nlcd_1992_landcover_2018_08_31/")
 nlcd <- raster("nlcd_1992_whole_simplified.tif")
 routes <- readOGR("/proj/hurlbertlab/gdicecco/nlcd_frag_proj_shapefiles/BBS_routepaths/us_bbs_half_route_paths_5km.shp")
 routes_transf <- spTransform(routes, crs(nlcd))
-routes_tr <- crop(routes_transf, extent(nlcd))
+
+routes_tr <- routes_transf[routes_transf@data$rteno <= 4000 & routes_transf@data$rteno < 3000, ]
 
 routenos <- routes_tr@data[ , 1]
 

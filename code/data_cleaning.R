@@ -36,6 +36,7 @@ species_list <- species %>%
          sporder != "Falconiformes", 
          sporder != "Anseriformes",
          sporder != "Cathartiformes")
+# write.csv(species_list, "data/species_list.csv", row.names = F)
 
 counts.subs <- counts %>%
   filter(rpid == 101) %>%

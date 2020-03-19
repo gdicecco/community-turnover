@@ -129,3 +129,34 @@ spp_occ_year_bins <- log_abund_subs %>%
   unnest(cols = c("tidy_mod"))
 
 # write.csv(spp_occ_year_bins, "data/occupancy_trend_mods.csv", row.names = F)
+
+# Vis model output
+
+spp_occ_year_bins <- read.csv("data/occupancy_trend_mods.csv", stringsAsFactors = F)
+
+spp_occ_trends <- spp_occ_year_bins %>%
+  group_by(aou, english_common_name) %>%
+  nest() %>%
+  mutate(mean_occ_trend = map_dbl(data, ~{
+    df <- .
+    trend <- df %>%
+      filter(term == "year_bin")
+    
+    mean(trend$estimate, na.rm = T)
+  }),
+  sd_occ_trend = map_dbl(data, ~{
+    df <- .
+    trend <- df %>%
+      filter(term == "year_bin")
+    
+    sd(trend$estimate, na.rm = T)
+  }),
+  routes = map_dbl(data, ~nrow(.))) %>%
+  filter(routes > 50) %>%
+  select(-data)
+# write.csv(spp_occ_trends, "data/spp_occ_trends.csv", row.names = F)
+
+ggplot(spp_occ_trends, aes(x = mean_occ_trend)) + geom_histogram(col = "white") +
+  geom_vline(aes(xintercept = mean(mean_occ_trend)), col = "blue", cex = 1) +
+  labs(x = "Mean trend in occupancy", y = "Count")
+ggsave("figures/mean_occupancy_trend_hist.pdf")

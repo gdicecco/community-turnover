@@ -16,6 +16,10 @@ theme_set(theme_classic(base_size = 15))
 
 log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors = F)
 
+# Land cover and climate data
+
+
+
 ## Community trajectories
 # https://cran.r-project.org/web/packages/vegclust/vignettes/CTA.html
 
@@ -47,4 +51,3 @@ ggplot(logabund_wide, aes(x = dir50, y = dir25)) + geom_point() +
   geom_abline(intercept = 0, slope = 1, cex = 1) +
   annotate(geom= "text", x = 0.78, y = 0.7, label = paste0("r = ", r), size = 8)
 ggsave("figures/directionality_time_series_comparison.pdf")
-

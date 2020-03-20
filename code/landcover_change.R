@@ -41,4 +41,4 @@ bbs_maxdeltas <- bbs_halfroutes %>%
   unnest()
 # write.csv(bbs_maxdeltas, "data/bbs_half_route_max_land_change.csv", row.names = F)
 
-## Measure land cover change as PCA values (also use directionality?)
+## Measure land cover change as PCA values of land cover class deltas

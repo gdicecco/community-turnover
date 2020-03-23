@@ -17,10 +17,11 @@ library(units)
 # Half-route paths
 
 ca_routes <- read_sf("/proj/hurlbertlab/gdicecco/nlcd_frag_proj_shapefiles/BBS_routepaths/canada_bbs_half_route_paths_5km.shp") %>%
-  dplyr::select(rteno, stops, RTENAME, STATUS, geometry) %>%
+  rename(rteno = "Province_R") %>%
+  dplyr::select(rteno, stops, geometry) %>%
   mutate(country = "Canada")
 us_routes <- read_sf("/proj/hurlbertlab/gdicecco/nlcd_frag_proj_shapefiles/BBS_routepaths/us_bbs_half_route_paths_5km.shp") %>%
-  dplyr::select(rteno, stops, RTENAME, STATUS, geometry) %>%
+  dplyr::select(rteno, stops, geometry) %>%
   mutate(country = "US")
 
 na_routes <- rbind(ca_routes, us_routes)

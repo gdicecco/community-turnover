@@ -31,15 +31,22 @@ na_routes <- rbind(ca_routes, us_routes)
 
 # Function: get average temperature for one BBS route polygon
 
-daymetMean <- function(stateroute, stps) {
-  rte <- filter(na_routes_transf, rteno == stateroute, stops = stps)
+daymetMean <- function(stateroute) {
+  rte <- filter(na_routes_transf, rteno == stateroute, stops = "1-25")
   
   daymet_crop <- raster::crop(daymet_mean, rte)
   daymet_mask <- raster::mask(daymet_crop, rte)
   
   local_extract <- raster::extract(daymet_mask, rte, fun = mean, na.rm = T, df = T)
   
-  return(mean(local_extract$layer))
+  rte2 <- filter(na_routes_transf, rteno == stateroute, stops = "26-50")
+  
+  daymet_crop <- raster::crop(daymet_mean, rte2)
+  daymet_mask <- raster::mask(daymet_crop, rte2)
+  
+  local_extract2 <- raster::extract(daymet_mask, rte2, fun = mean, na.rm = T, df = T)
+  
+  return(data.frame(stops = c("1-25", "26-50"), temp_mean = c(mean(local_extract$layer), mean(local_extract2$layer))))
 }
 
 # Function errors if some routes are outside the extent of DAYMET raster - use possibly function to ignore those routes
@@ -77,7 +84,8 @@ for(y in years) {
     na_routes_transf <- st_transform(na_routes, "+proj=lcc +datum=WGS84 +lon_0=-100 +lat_0=42.5 +x_0=0 +y_0=0 +units=km +lat_1=25 +lat_2=60 +ellps=WGS84 +towgs84=0,0,0")
 
     routeclim <- data.frame(stateroute = na_routes_transf$rteno, stops = na_routes_transf$stops) %>%
-      mutate(mean_temp = purrr::map_dbl(stateroute, stops, ~possibly_daymetMean(stateroute = .x, stops = .y)))
+      mutate(mean_temp = purrr::map(stateroute, ~possibly_daymetMean)) %>%
+      unnest()
     
     routeclim <- bind_rows(routeclim_us, routeclim_ca)
     

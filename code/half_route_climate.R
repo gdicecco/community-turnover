@@ -7,12 +7,10 @@ library(sf)
 library(rgdal)
 library(rgeos)
 library(daymetr)
-library(tidyverse)
+library(dplyr)
 library(raster)
 library(ncdf4)
-library(lubridate)
 library(units)
-library(purrr)
 
 ## Read in data
 

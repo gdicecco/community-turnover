@@ -1,0 +1,16 @@
+Label,Code,Definition
+Unclassified,11,Areas not classified due to clouds
+Settlement,21,Built-up and urban
+Roads,25,"Primary, secondary and tertiary"
+Water,31,Natural and human-made
+Forest,41,Treed areas >1 ha in size
+Forest Wetland ,42,Wetland with forest cover
+Trees,45,Treed areas <1 ha in size
+Treed Wetland ,46,Wetland with tree cover
+Cropland,51,Annual and perennial
+Grassland Managed,61,Natural grass and shrubs used for cattle grazing
+Grassland Unmanaged,62,"Natural grass and shrubs with no apparent use (forest openings, alpine meadows, tundra, etc.) "
+Wetland,71,Undifferentiated wetland
+Wetland Shrub,73,Wetland with shrub cover
+Wetland Herb ,74,Wetland with grass cover
+Other land ,91,"Rock, beaches, ice, barren land "

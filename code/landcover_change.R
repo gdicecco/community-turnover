@@ -2,6 +2,7 @@
 
 library(tidyverse)
 library(purrr)
+library(tmap)
 
 ## read in data
 
@@ -40,6 +41,66 @@ bbs_maxdeltas <- bbs_halfroutes %>%
   select(-data) %>%
   unnest()
 # write.csv(bbs_maxdeltas, "data/bbs_half_route_max_land_change.csv", row.names = F)
+
+# Correlation between max land cover values for half routes
+
+bbs_maxdeltas_complete <- bbs_maxdeltas %>%
+  group_by(stateroute) %>%
+  filter(n() == 2)
+
+cor(filter(bbs_maxdeltas_complete, stops == "1-25")$class, filter(bbs_maxdeltas_complete, stops == "26-50")$class, use = "pairwise.complete.obs")
+# 0.9
+
+cor(filter(bbs_maxdeltas_complete, stops == "1-25")$deltaCover, filter(bbs_maxdeltas_complete, stops == "26-50")$deltaCover, use = "pairwise.complete.obs")
+# 0.5
+
+# For single routes - max land cover change
+
+landcover_us <- read.csv("/Volumes/hurlbertlab/dicecco/data/fragmentation_indices_nlcd_simplified.csv", stringsAsFactors = F) %>%
+  mutate(country = "US")
+landcover_ca <- read.csv("/Volumes/hurlbertlab/dicecco/data/fragmentation_indices_canada.csv", stringsAsFactors = F) %>%
+  mutate(country = "Canada")
+
+landcover_na <- bind_rows(landcover_us, landcover_ca)
+
+oneroute_maxdeltas <- landcover_na %>%
+  mutate(min_year = case_when(country == "US" ~ 1992,
+                              TRUE ~ 1990),
+         max_year = case_when(country == "US" ~ 2016,
+                              TRUE ~ 2010)) %>%
+  group_by(country, stateroute) %>%
+  nest() %>%
+  mutate(maxDelta = map(data, ~possibly_max_delta(.))) %>%
+  select(-data) %>%
+  unnest()
+# write.csv(oneroute_maxdeltas, "data/bbs_route_max_landcover_change.csv", row.names = F)
+
+# Category of maximum land cover change
+
+# Landcover legend US
+newcode <- data.frame(Code = seq(1,9), 
+                      Label = c("Open water", "Urban", "Barren", "Forest", "Shrubland", 
+                                 "Agricultural", "Grasslands", "Wetlands", "Perennial ice, snow"))
+
+# Landcover legend Canada
+ca_codes <- read.csv("data/canada_landcover_classification.csv", stringsAsFactors = F) %>%
+  select(-Definition)
+
+landcover_legend <- bind_rows(newcode, ca_codes)
+
+oneroute_plot <- oneroute_maxdeltas %>%
+  na.omit() %>%
+  left_join(landcover_legend, by = c("class" = "Code")) %>%
+  left_join(routes) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+na_map <- read_sf("data/ne_50m_admin_1_states_provinces_lakes.shp") %>%
+  filter(iso_a2 == "CA" | iso_a2 == "US") %>%
+  filter(name != "Hawaii")
+
+max_delta_map <- tm_shape(na_map) + tm_borders() +
+  tm_shape(oneroute_plot) + tm_dots(col = "Label", size = 0.1, palette = "Set2")
+tmap_save(max_delta_map, "figures/max_landcover_change_bbs_routes.pdf")
 
 ## Measure land cover change as PCA values of land cover class deltas
 

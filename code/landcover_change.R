@@ -42,3 +42,21 @@ bbs_maxdeltas <- bbs_halfroutes %>%
 # write.csv(bbs_maxdeltas, "data/bbs_half_route_max_land_change.csv", row.names = F)
 
 ## Measure land cover change as PCA values of land cover class deltas
+
+# This doesn't work - need to remove routes with duplicates
+bbs_landcover_wide <- bbs_halfroutes %>%
+  filter(country == "US") %>%
+  mutate(min_year = 1992,
+         max_year = 2016) %>%
+  filter(year == min_year | year == max_year) %>%
+  mutate(year_name = case_when(year == min_year ~ "year1",
+                               year == max_year ~ "year2")) %>%
+  select(year_name, class, prop.landscape) %>%
+  distinct() %>%
+  pivot_wider(names_from = year_name, values_from = prop.landscape) %>%
+  replace_na(list(year1 = 0, year2 = 0)) %>%
+  mutate(deltaCover = year2 - year1)
+
+bbs_landcover_wide_ca <- bbs_maxdeltas %>%
+  filter(country == "Canada") %>%
+  pivot_wider(names_from = class, values_from = deltaCover)

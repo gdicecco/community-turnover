@@ -11,6 +11,7 @@ library(dplyr)
 library(raster)
 library(ncdf4)
 library(units)
+library(purrr)
 
 ## Read in data
 

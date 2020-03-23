@@ -29,8 +29,8 @@ na_routes <- rbind(ca_routes, us_routes)
 
 # Function: get average temperature for one BBS route polygon
 
-daymetMean <- function(stateroute) {
-  rte <- filter(na_routes_transf, rteno == stateroute)
+daymetMean <- function(stateroute, stps) {
+  rte <- filter(na_routes_transf, rteno == stateroute, stops = stps)
   
   daymet_crop <- raster::crop(daymet_mean, rte)
   daymet_mask <- raster::mask(daymet_crop, rte)
@@ -74,8 +74,8 @@ for(y in years) {
     
     na_routes_transf <- st_transform(na_routes, "+proj=lcc +datum=WGS84 +lon_0=-100 +lat_0=42.5 +x_0=0 +y_0=0 +units=km +lat_1=25 +lat_2=60 +ellps=WGS84 +towgs84=0,0,0")
 
-    routeclim <- data.frame(stateroute = na_routes_transf$rteno) %>%
-      mutate(mean_temp = purrr::map_dbl(stateroute, possibly_daymetMean))
+    routeclim <- data.frame(stateroute = na_routes_transf$rteno, stops = na_routes_transf$stops) %>%
+      mutate(mean_temp = purrr::map_dbl(stateroute, stops, ~possibly_daymetMean(stateroute = .x, stops = .y)))
     
     routeclim <- bind_rows(routeclim_us, routeclim_ca)
     
@@ -94,17 +94,17 @@ for(y in years) {
 
 dir <- "/proj/hurlbertlab/gdicecco/half_bbs_route_daymet_out/"
 
-routeDAYMET <- data.frame(stateroute = c(), year = c(), mean_tmax = c(), mean_tmin = c())
+routeDAYMET <- data.frame(stateroute = c(), stops = c(), year = c(), mean_tmax = c(), mean_tmin = c())
 
 for(y in years) {
   files <- list.files(dir)
   files_y <- files[grepl(y, files)]
   
   tmax <- read.csv(paste0(dir, files_y[grepl("tmax", files_y)])) %>%
-    group_by(stateroute) %>%
+    group_by(stateroute, stops) %>%
     summarize(mean_tmax = mean(mean_temp, na.rm = T))
   tmin <- read.csv(paste0(dir, files_y[grepl("tmin", files_y)])) %>%
-    group_by(stateroute) %>%
+    group_by(stateroute, stops) %>%
     summarize(mean_tmin = mean(mean_temp, na.rm = T))
   
   tmp <- tmax %>%

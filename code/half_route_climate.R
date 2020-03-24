@@ -12,6 +12,7 @@ library(raster)
 library(ncdf4)
 library(units)
 library(purrr)
+library(tidyr)
 
 ## Read in data
 

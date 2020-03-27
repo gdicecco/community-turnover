@@ -67,9 +67,8 @@ dir_model <- logabund_wide %>%
 # 629 routes
 # write.csv(dir_model, "data/directionality_mod_input.csv", row.names = F)
 
-# Spatial CAR model -- Talk to Allen/James - this needs to be GLM (directionality is bounded 0-1)
+# GLM model -- Talk to Allen/James - this needs to be spatial CAR + GLM (directionality is bounded 0-1)
 ## Possibly CARBayes?
-# get species weights matrix
 
 # Coordinates of BBS routes
 
@@ -78,26 +77,46 @@ coords_bbs <- dir_model %>%
   dplyr::select(stateroute) %>%
   distinct() %>%
   left_join(routes) %>%
-  dplyr::select(stateroute, longitude, latitude)
+  dplyr::select(stateroute, bcr, longitude, latitude) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
 
-coords_mat <- as.matrix(coords_bbs[, -1])
+## Find nearest grouped BBS routes within BCR
 
-# Calculate nearest neighbors and make spatial neighborhood
-k0 <- knearneigh(coords_mat, longlat=T, k=1)
-k1 <- knn2nb(k0)
+dist_bcr <- function(strte) {
+  focal_rte <- coords_bbs %>%
+    filter(stateroute == strte)
+  
+  bcr_rtes <- coords_bbs %>%
+    filter(bcr == focal_rte$bcr)
+  
+  dist <- st_distance(bcr_rtes, focal_rte)
+  
+  dist_df <- bcr_rtes %>%
+    st_set_geometry(NULL) %>%
+    mutate(distance = dist[, 1], 
+           focal_rte = strte)
+  
+  return(dist_df)
+}
 
-# Find maximum neighbor distance and use this distance to define neighborhoods
-max.d <- max(unlist(nbdists(k1, coords_mat, longlat=T)))
-nb0.birds <- dnearneigh(coords_mat, 0, max.d, longlat=T)
-plot(nb0.birds, coords_mat)
+bbs_route_distances <- map_dfr(unique(dir_model$stateroute), ~dist_bcr(.))
 
-# Using a distance threshold of 100km
-nb1.birds <- dnearneigh(coords_mat,1,100,longlat=T)
-plot(nb1.birds, coords_mat)
+## Model from 1 route up to nearest 30 routes
+## Directionality ~ tmin + tmax + max(deltaLandCover)
 
-# Create spatial weights based on linear distance decay
-glist.birds <- nbdists(nb0.birds, coords_mat, longlat=T)
-glist.birds <- lapply(glist.birds, function(x) 1-(x/ceiling(max.d))) # Round up max.d so that all point get weights
-wt.birds <- nb2listw(nb0.birds, style='B', glist=glist.birds)
+## Variance partitioning with ecospat.varpat(model.1, model.2, model.12) in ecospat
 
-dir_mod <- spautolm(dir25 ~ climateTrend + deltaCover, data = dir_model, wt.birds, na.action = na.fail, family = "CAR")
+stateroutes <- data.frame(stateroute = unique(dir_model$stateroute))
+
+scale_model_input <- stateroutes %>%
+  mutate(scale = map(stateroute, ~data.frame(scale = rep(1:30)))) %>%
+  unnest(cols = c(scale)) %>%
+  mutate(model_input = map2(stateroute, scale, ~{
+    bbs_route_distances %>%
+      filter(focal_rte == .x) %>%
+      arrange(distance) %>%
+      slice(1:.y)
+  }))
+
+## Need to aggregate breeding averages and land covers to calculate change over aggregated BBS routes
+

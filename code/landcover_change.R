@@ -101,23 +101,3 @@ na_map <- read_sf("data/ne_50m_admin_1_states_provinces_lakes.shp") %>%
 max_delta_map <- tm_shape(na_map) + tm_borders() +
   tm_shape(oneroute_plot) + tm_dots(col = "Label", size = 0.1, palette = "Set2")
 tmap_save(max_delta_map, "figures/max_landcover_change_bbs_routes.pdf")
-
-## Measure land cover change as PCA values of land cover class deltas
-
-# This doesn't work - need to remove routes with duplicates
-bbs_landcover_wide <- bbs_halfroutes %>%
-  filter(country == "US") %>%
-  mutate(min_year = 1992,
-         max_year = 2016) %>%
-  filter(year == min_year | year == max_year) %>%
-  mutate(year_name = case_when(year == min_year ~ "year1",
-                               year == max_year ~ "year2")) %>%
-  select(year_name, class, prop.landscape) %>%
-  distinct() %>%
-  pivot_wider(names_from = year_name, values_from = prop.landscape) %>%
-  replace_na(list(year1 = 0, year2 = 0)) %>%
-  mutate(deltaCover = year2 - year1)
-
-bbs_landcover_wide_ca <- bbs_maxdeltas %>%
-  filter(country == "Canada") %>%
-  pivot_wider(names_from = class, values_from = deltaCover)

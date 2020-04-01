@@ -104,6 +104,8 @@ for(y in years) {
 
 dir <- "/proj/hurlbertlab/gdicecco/half_bbs_route_daymet_out/"
 
+years <- c(1990:2017)
+
 routeDAYMET <- data.frame(stateroute = c(), stops = c(), year = c(), mean_tmax = c(), mean_tmin = c())
 
 for(y in years) {

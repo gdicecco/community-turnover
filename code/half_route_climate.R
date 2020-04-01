@@ -59,7 +59,7 @@ possibly_daymetMean <- purrr::possibly(daymetMean,
 
 setwd("/proj/hurlbertlab/gdicecco/")
 
-years <- c(1990:2017)
+years <- c(2011:2017)
 
 for(y in years) {
   download_daymet_ncss(location = c(60, -145, 15, -52),

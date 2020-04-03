@@ -20,12 +20,17 @@ log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors
 routes <- read.csv("/Volumes/hurlbertlab/databases/BBS/2017/bbs_routes_20170712.csv", stringsAsFactors = F) %>%
   mutate(stateroute = statenum*1000 + route)
 
+# Land cover and climate data - 1/2 route scale
+
+bbs_half_landcover <- read.csv('data/bbs_half_route_max_land_change.csv', stringsAsFactors = F)
+bbs_half_climate <- read.csv("data/bbs_half_route_breeding_season_climate.csv", stringsAsFactors = F)
+
 # Land cover and climate data - 1 route scale
 
 bbs_landcover <- read.csv("data/bbs_route_max_landcover_change.csv", stringsAsFactors = F)
 bbs_climate <- read.csv("data/bbs_routes_climate_trends.csv", stringsAsFactors = F)
 
-## Land cover and climate data for calculating multiple scales
+## Raw land cover and climate data for calculating multiple scales
 
 landcover_us <- read.csv("/Volumes/hurlbertlab/dicecco/data/fragmentation_indices_nlcd_simplified.csv", stringsAsFactors = F) %>%
   mutate(country = "US")

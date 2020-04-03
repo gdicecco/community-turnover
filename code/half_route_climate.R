@@ -114,17 +114,17 @@ for(y in years) {
   
   tmax <- read.csv(paste0(dir, files_y[grepl("tmax", files_y)])) %>%
     group_by(stateroute, stops) %>%
-    summarize(mean_tmax = mean(mean_temp, na.rm = T))
+    summarize(mean_tmax = mean(temp_mean, na.rm = T))
   tmin <- read.csv(paste0(dir, files_y[grepl("tmin", files_y)])) %>%
     group_by(stateroute, stops) %>%
-    summarize(mean_tmin = mean(mean_temp, na.rm = T))
+    summarize(mean_tmin = mean(temp_mean, na.rm = T))
   
   tmp <- tmax %>%
     left_join(tmin, by = c("stateroute", "stops")) %>%
     mutate(year = y)
   print(nrow(tmp))
   
-  routeDAYMET <- rbind(routeDAYMET, tmp)
+  routeDAYMET <- bind_rows(routeDAYMET, tmp)
 }
 
 setwd("/proj/hurlbertlab/gdicecco/")

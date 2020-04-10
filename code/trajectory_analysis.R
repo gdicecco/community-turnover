@@ -234,10 +234,10 @@ log_abund_wider <- bbs_subset %>%
   select(-data) %>%
   unnest(cols = c(year_bins)) %>%
   group_by(stateroute, aou, year_bin) %>%
-  summarize(mean_abund = mean(speciestotal),
+  summarize(mean_abund = mean(speciestotal) + 1,
             log_abund = log10(mean_abund)) %>%
   dplyr::select(stateroute, aou, year_bin, log_abund) %>%
-  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean))
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0))
 
 # Excluding transient species
 log_abund_core <- bbs_subset %>%
@@ -276,11 +276,11 @@ log_abund_core <- bbs_subset %>%
   unnest(cols = c(year_bins)) %>%
   group_by(stateroute, aou, year_bin) %>%
   summarize(n_years = n_distinct(year),
-            mean_abund = mean(speciestotal),
+            mean_abund = mean(speciestotal) + 1,
             log_abund = log10(mean_abund)) %>%
   filter(n_years > 1) %>%
   dplyr::select(stateroute, aou, year_bin, log_abund) %>%
-  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean))
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0))
 
 # Directionality at 1 route scale, core vs. transients
 
@@ -348,12 +348,18 @@ scale_model_input <- bbs_subset %>%
     # trend_tmin <- coef(lm(mean_tmin ~ year, data = climate))[[2]]
     
     log_abund <- log_abund_wider %>%
-      filter(stateroute %in% df$stateroute)
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin) %>%
+      summarize_all(mean, na.rm = T) %>%
+      dplyr::select(-stateroute)
     abund_dist <- dist(log_abund[, -1])
     dir_all <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(log_abund)), surveys = log_abund$year_bin)
     
     log_abund_core <- log_abund_core %>%
-      filter(stateroute %in% df$stateroute)
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin) %>%
+      summarize_all(mean, na.rm = T) %>%
+      dplyr::select(-stateroute)
     abund_dist_core <- dist(log_abund_core[, -1])
     dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_abund_core)), surveys = log_abund_core$year_bin)
     

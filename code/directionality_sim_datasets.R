@@ -35,16 +35,16 @@ for(i in n_spec) {
     
     community_timeseries <- community_change %>%
       mutate(t2 = case_when(trend == "pos" ~ t1 + j*t1,
-                            trend == "neg" ~ t1 - j*t1,
+                            trend == "neg" ~ ifelse(t1 - j*t1 >= 0, t1 - j*t1, 0),
                             trend == "none" ~ t1),
              t3 = case_when(trend == "pos" ~ t2 + j*t2,
-                            trend == "neg" ~ t2 - j*t2,
+                            trend == "neg" ~ ifelse(t2 - j*t2 >= 0, t2 - j*t2, 0),
                             trend == "none" ~ t2),
              t4 = case_when(trend == "pos" ~ t3 + j*t3,
-                            trend == "neg" ~ t3 - j*t3,
+                            trend == "neg" ~ ifelse(t3 - j*t3 >= 0, t3 - j*t3, 0),
                             trend == "none" ~ t3),
              t5 = case_when(trend == "pos" ~ t4 + j*t4,
-                            trend == "neg" ~ t4 - j*t4,
+                            trend == "neg" ~ ifelse(t4 - j*t4 >= 0, t4 - j*t4, 0),
                             trend == "none" ~ t4)) %>%
       mutate_at(c('t1', "t2", "t3", "t4", "t5"), ~ifelse(.<1, 1, .)) %>%
       mutate_at(c("t1", "t2", "t3", "t4", "t5"), ~log(round(.)))
@@ -58,6 +58,10 @@ for(i in n_spec) {
     dist_mat <- dist(community_long)  
     dir <- trajectoryDirectionality(dist_mat, sites = rep(1, nrow(community_long)), surveys = community_long$time)
     
+    if(j > 0) {
+      trajectoryPCoA(dist_mat, sites = rep(1, nrow(community_long)), surveys = community_long$time)
+    }
+    
     poptrend_results <- bind_rows(poptrend_results, data.frame(n_spec = i, slope = j, dir = dir))
   
   }
@@ -70,30 +74,41 @@ ggplot(poptrend_plot, aes(x = (2*n_spec)/30, y = slope, fill = dir)) + geom_tile
   labs(x = "Proportion species with directional trends", y = "Population trend", fill = "Directionality")
 ggsave("figures/directionality_sim_poptrends.pdf")
 
+
 ### Sample community at 10 time points
 ### Extinctions in t2, colonizations in t4
-### Test from 2-10 species C&E (half colonize, half extinct)
+### Test from 4-20 species C&E (half colonize, half extinct)
 
 n_spec <- c(1:5)
 
 colext_results <- data.frame(n_spec = c(), dir = c())
 
 for(i in n_spec) {
-  col_spec <- data.frame(species = paste0("s", c(31:35)), t1 = 0) %>%
+  col1_spec <- data.frame(species = paste0("s", c(31:35)), t1 = 0) %>%
+    sample_n(i)
+  col2_spec <- data.frame(species = paste0("s", c(36:40)), t1 = 0) %>%
     sample_n(i)
   
-  ext_spec <- community %>%
+  ext1_spec <- community %>%
+    sample_n(i)
+  ext2_spec <- community %>%
+    filter(!(species %in% ext1_spec$species)) %>%
     sample_n(i)
   
   community_timeseries <- community %>%
-    bind_rows(col_spec) %>%
-    mutate(t2 = case_when(species %in% ext_spec$species ~ 0,
-                          species %in% col_spec$species ~ 0,
+    bind_rows(col1_spec, col2_spec) %>%
+    mutate(t2 = case_when(species %in% ext1_spec$species ~ 0,
+                          species %in% col1_spec$species ~ 0,
                           TRUE ~ t1),
-           t3 = t2,
-           t4 = case_when(species %in% col_spec$species ~ round(exp(rlnorm(1, meanlog = 0.75, sd=0.5))),
+           t3 = case_when(species %in% ext2_spec$species ~ 0,
+                          species %in% col2_spec$species ~ 0,
+                          TRUE ~ t2),
+           t4 = case_when(species %in% col1_spec$species ~ round(exp(rlnorm(1, meanlog = 0.75, sd=0.5))),
                           TRUE ~ t3),
-           t5 = t4)
+           t5 = case_when(species %in% col2_spec$species ~ round(exp(rlnorm(1, meanlog = 0.75, sd=0.5))),
+                          TRUE ~ t4)) %>%
+    mutate_at(c('t1', "t2", "t3", "t4", "t5"), ~ifelse(.<1, 1, .)) %>%
+    mutate_at(c("t1", "t2", "t3", "t4", "t5"), ~log(.))
   
   community_names <- community_timeseries$species
   
@@ -103,6 +118,7 @@ for(i in n_spec) {
   
   dist_mat <- dist(community_long)  
   dir <- trajectoryDirectionality(dist_mat, sites = rep(1, nrow(community_long)), surveys = community_long$time)
+  trajectoryPCoA(dist_mat, sites = rep(1, nrow(community_long)), surveys = community_long$time)
   
   colext_results <- bind_rows(colext_results, data.frame(n_spec = i, dir = dir))
   

@@ -312,6 +312,118 @@ ggplot(dir_compare, aes(x = dir_all, y = dir_core)) +
   geom_abline(intercept = 0, slope = 1) + labs(x = "Directionality (all spp)", y = "Directionality (excl. transients)")
 ggsave("figures/directionality_all_vs_core.pdf")
 
+### Compare 5 time points to all years directionality for one route
+
+dir_compare_timepts <- dir_all_spp %>%
+  dplyr::select(-data) %>%
+  left_join(logabund_wide) %>%
+  na.omit() %>%
+  mutate(n_years = map_dbl(data, ~{
+    df <- .
+    length(unique(df$year[df$year >= 1990]))
+  }))
+
+ggplot(dir_compare_timepts, aes(x = n_years, y = dir25)) + geom_point() + geom_smooth(method = "lm", se = F) +
+  labs(x = "Years sampled", y = "Directionality")
+ggsave("figures/directionality_by_years_sampled.pdf")
+
+ggplot(dir_compare_timepts, aes(x = dir_all, y = dir25)) + 
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1) +
+  geom_smooth(method = "lm", se = F) +
+  labs(x = "Directionality (4 year time windows)", y = "Directionality (all years)")
+ggsave("figures/directionality_25yr_vs_5timepts.pdf")
+
+### Compare trajectoryDir to manually calculated trajectory distances from PCoA
+
+directionality_manual <- function(points) {
+  if(nrow(points) == 6) {
+    totaldist <- sqrt((points[6,1] - points[1,1])^2 + 
+                        (points[6,2] - points[1,2])^2 +
+                        (points[6,3] - points[1,3])^2 +
+                        (points[6,4] - points[1,4])^2 +
+                        (points[6,5] - points[1,5])^2)
+    
+    cumdist <- sum(sqrt((points[2,1] - points[1,1])^2 + 
+                          (points[2,2] - points[1,2])^2 +
+                          (points[2,3] - points[1,3])^2 +
+                          (points[2,4] - points[1,4])^2 +
+                          (points[2,5] - points[1,5])^2) +
+                     sqrt((points[3,1] - points[2,1])^2 + 
+                            (points[3,2] - points[2,2])^2 +
+                            (points[3,3] - points[2,3])^2 +
+                            (points[3,4] - points[2,4])^2 +
+                            (points[3,5] - points[2,5])^2) +
+                     sqrt((points[4,1] - points[3,1])^2 + 
+                            (points[4,2] - points[3,2])^2 +
+                            (points[4,3] - points[3,3])^2 +
+                            (points[4,4] - points[3,4])^2 +
+                            (points[4,5] - points[3,5])^2) +
+                     sqrt((points[5,1] - points[4,1])^2 + 
+                            (points[5,2] - points[4,2])^2 +
+                            (points[5,3] - points[4,3])^2 +
+                            (points[5,4] - points[4,4])^2 +
+                            (points[5,5] - points[4,5])^2) +
+                     sqrt((points[6,1] - points[5,1])^2 + 
+                            (points[6,2] - points[5,2])^2 +
+                            (points[6,3] - points[5,3])^2 +
+                            (points[6,4] - points[5,4])^2 +
+                            (points[6,5] - points[5,5])^2))
+    dir <- cumdist/totaldist
+    return(dir) }
+  else {
+    totaldist <- sqrt((points[5,1] - points[1,1])^2 + 
+                        (points[5,2] - points[1,2])^2 +
+                        (points[5,3] - points[1,3])^2 +
+                        (points[5,4] - points[1,4])^2)
+    
+    cumdist <- sum(sqrt((points[2,1] - points[1,1])^2 + 
+                          (points[2,2] - points[1,2])^2 +
+                          (points[2,3] - points[1,3])^2 +
+                          (points[2,4] - points[1,4])^2) +
+                     sqrt((points[3,1] - points[2,1])^2 + 
+                            (points[3,2] - points[2,2])^2 +
+                            (points[3,3] - points[2,3])^2 +
+                            (points[3,4] - points[2,4])^2) +
+                     sqrt((points[4,1] - points[3,1])^2 + 
+                            (points[4,2] - points[3,2])^2 +
+                            (points[4,3] - points[3,3])^2 +
+                            (points[4,4] - points[3,4])^2) +
+                     sqrt((points[5,1] - points[4,1])^2 + 
+                            (points[5,2] - points[4,2])^2 +
+                            (points[5,3] - points[4,3])^2 +
+                            (points[5,4] - points[4,4])^2))
+    dir <- cumdist/totaldist
+    return(dir) }
+  }
+
+dir_manual_all_spp <- log_abund_wider %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(pcoa_all = map(data, ~{
+    df <- .
+    dist <- dist(df[, -1])
+    pcoa <- trajectoryPCoA(dist, sites = rep(1, nrow(df)), surveys = df$year_bin)
+  }),
+  dir_manual = map_dbl(pcoa_all, ~{
+    pcoa <- .
+    points <- pcoa$points
+    directionality_manual(points)
+  }))
+
+dir_compare_manual <- dir_manual_all_spp %>%
+  dplyr::select(-data) %>%
+  left_join(dir_all_spp)
+
+ggplot(dir_compare_manual, aes(x = dir_manual, y = dir_all)) + 
+  geom_point() + labs(x = "Cumulative distance/Distance between first and last points", y = "Directionality (all species)")
+ggsave("figures/manual_directionality_vs_trajectory.pdf")
+
+ggplot(dir_compare_manual, aes(x = dir_manual)) + 
+  geom_histogram(col = "white") + scale_x_log10() +
+  labs(x = "Cumulative distance/Distance between first and last points", y = "Count")
+ggsave("figures/manual_directionality_histogram.pdf")
+
 ## At each scale (1 route, up to nearest 25 routes within BCR) 
 ## Get max land cover delta from raw land cover data and get trend in Tmin and trend in Tmax
 ## Calculate directionality for each grouping of routes: average log(abundance) across routes when pooled

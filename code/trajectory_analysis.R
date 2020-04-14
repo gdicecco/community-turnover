@@ -416,13 +416,13 @@ dir_compare_manual <- dir_manual_all_spp %>%
   left_join(dir_all_spp)
 
 ggplot(dir_compare_manual, aes(x = dir_manual, y = dir_all)) + 
-  geom_point() + labs(x = "Cumulative distance/Distance between first and last points", y = "Directionality (all species)")
+  geom_point() + labs(x = "Distance between first and last points/Cumulative distnace", y = "Directionality (all species)")
 ggsave("figures/manual_directionality_vs_trajectory.pdf")
 # cor(dir_compare_manual$dir_manual, dir_compare_manual$dir_all) = -0.37
 
 ggplot(dir_compare_manual, aes(x = dir_manual)) + 
-  geom_histogram(col = "white") + scale_x_log10() +
-  labs(x = "Cumulative distance/Distance between first and last points", y = "Count")
+  geom_histogram(col = "white") + 
+  labs(x = "Distance between first and last points/Cumulative distance", y = "Count")
 ggsave("figures/manual_directionality_histogram.pdf")
 
 ## At each scale (1 route, up to nearest 25 routes within BCR) 

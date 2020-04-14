@@ -369,7 +369,7 @@ directionality_manual <- function(points) {
                             (points[6,3] - points[5,3])^2 +
                             (points[6,4] - points[5,4])^2 +
                             (points[6,5] - points[5,5])^2))
-    dir <- cumdist/totaldist
+    dir <- totaldist/cumdist
     return(dir) }
   else {
     totaldist <- sqrt((points[5,1] - points[1,1])^2 + 
@@ -393,7 +393,7 @@ directionality_manual <- function(points) {
                             (points[5,2] - points[4,2])^2 +
                             (points[5,3] - points[4,3])^2 +
                             (points[5,4] - points[4,4])^2))
-    dir <- cumdist/totaldist
+    dir <- totaldist/cumdist
     return(dir) }
   }
 
@@ -418,6 +418,7 @@ dir_compare_manual <- dir_manual_all_spp %>%
 ggplot(dir_compare_manual, aes(x = dir_manual, y = dir_all)) + 
   geom_point() + labs(x = "Cumulative distance/Distance between first and last points", y = "Directionality (all species)")
 ggsave("figures/manual_directionality_vs_trajectory.pdf")
+# cor(dir_compare_manual$dir_manual, dir_compare_manual$dir_all) = -0.37
 
 ggplot(dir_compare_manual, aes(x = dir_manual)) + 
   geom_histogram(col = "white") + scale_x_log10() +

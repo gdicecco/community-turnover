@@ -94,7 +94,7 @@ logabund_wide <- log_abund %>%
   nest() %>%
   mutate(dir50 = purrr::map_dbl(data, ~{
     df <- .
-    abund_dist <- dist(df)
+    abund_dist <- dist(df[, -c(1:2)])
     trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df)), surveys = df$year)
   })) %>%
   mutate(dir25 = purrr::map_dbl(data, ~{
@@ -102,7 +102,7 @@ logabund_wide <- log_abund %>%
     df <- df %>%
       filter(year >= 1990)
     if(max(df$year) - min(df$year) > 15) {
-      abund_dist <- dist(df)
+      abund_dist <- dist(df[, -c(1:2)])
       trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df)), surveys = df$year)
     } else(NA)
   }))
@@ -112,7 +112,7 @@ r <- round(cor(logabund_wide$dir50, logabund_wide$dir25), 2)
 ggplot(logabund_wide, aes(x = dir50, y = dir25)) + geom_point() + 
   labs(x = "Directionality 1970-2016", y = "Directionality 1990-2016") + 
   geom_abline(intercept = 0, slope = 1, cex = 1) +
-  annotate(geom= "text", x = 0.78, y = 0.7, label = paste0("r = ", r), size = 8)
+  annotate(geom= "text", x = 0.35, y = 0.3, label = paste0("r = ", r), size = 8)
 ggsave("figures/directionality_time_series_comparison.pdf")
 
 ## Model of directionality ~ land cover change + climate change
@@ -430,6 +430,7 @@ ggsave("figures/manual_directionality_histogram.pdf")
 ## Subsample time points: 5 years up to 15-20
 
 dir_sample_sens <- log_abund %>%
+  select(-countrynum) %>%
   pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean)) %>%
   group_by(stateroute) %>%
   nest() %>%
@@ -440,7 +441,7 @@ dir_sample_sens <- log_abund %>%
       df_sample <- df %>%
         sample_n(i)
       
-      abund_dist <- dist(df_sample)
+      abund_dist <- dist(df_sample[, -1])
       dir <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df_sample)), surveys = df_sample$year)
       
       res <- rbind(res, data.frame(n = i, dir = dir))
@@ -512,7 +513,7 @@ dir_rsample_wide <- log_abund_rsample_wide %>%
   mutate(dir = map_dbl(data, ~{
     df <- .
       
-    abund_dist <- dist(df)
+    abund_dist <- dist(df[, -1])
     dir <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df)), surveys = df$year_bin)
 
   }))
@@ -521,10 +522,36 @@ dir_rsample_plot <- dir_rsample_wide %>%
   select(-data) %>%
   left_join(dir_all_spp)
 
-ggplot(dir_rsample_plot, aes(x = dir, y = dir_all)) + geom_point() + labs(x = "Directionality (random sample count)", y = "Directionality (average count)")
+ggplot(dir_rsample_plot, aes(x = dir, y = dir_all)) + geom_point() + 
+  geom_abline(intercept = 0, slope= 1) +
+  labs(x = "Directionality (random sample count)", y = "Directionality (average count)")
 ggsave("figures/directionality_averaging_sensitivity.pdf")
 
 ## How does taking time window averages impact abundances
+## Directionality with presence-absence for comparison?
+
+pres_wide <- log_abund_wider %>%
+  mutate_all(~ifelse(. > 0 & . < 1000, 1, .))
+
+pres_dir <- pres_wide %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(dir = map_dbl(data, ~{
+    df <- .
+    
+    abund_dist <- dist(df[, -1])
+    dir <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df)), surveys = df$year_bin)
+    
+  }))
+
+abund_pres_dir <- pres_dir %>%
+  select(-data) %>%
+  left_join(dir_all_spp)
+
+ggplot(abund_pres_dir, aes(x = dir, y = dir_all)) + geom_point() +
+  geom_abline(intercept = 0, slope = 1) + 
+  labs(x = "Directionality (presence-absence)", y = "Directionality (average count)")
+ggsave("figures/directionality_abund_vs_presabs.pdf")
 
 ## At each scale (1 route, up to nearest 25 routes within BCR) 
 ## Get max land cover delta from raw land cover data and get trend in Tmin and trend in Tmax

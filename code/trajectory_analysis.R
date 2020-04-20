@@ -416,7 +416,8 @@ dir_compare_manual <- dir_manual_all_spp %>%
   left_join(dir_all_spp)
 
 ggplot(dir_compare_manual, aes(x = dir_manual, y = dir_all)) + 
-  geom_point() + labs(x = "Distance between first and last points/Cumulative distnace", y = "Directionality (all species)")
+  geom_point() + 
+  labs(x = "Distance between first and last points/Cumulative distance", y = "Directionality (all species)")
 ggsave("figures/manual_directionality_vs_trajectory.pdf")
 # cor(dir_compare_manual$dir_manual, dir_compare_manual$dir_all) = -0.37
 
@@ -424,6 +425,106 @@ ggplot(dir_compare_manual, aes(x = dir_manual)) +
   geom_histogram(col = "white") + 
   labs(x = "Distance between first and last points/Cumulative distance", y = "Count")
 ggsave("figures/manual_directionality_histogram.pdf")
+
+## Determine trajectoryDirectionality for time series sensitivity
+## Subsample time points: 5 years up to 15-20
+
+dir_sample_sens <- log_abund %>%
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean)) %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(samplesize = map(data, ~{
+    df <- .
+    res <- data.frame(n = c(), dir = c())
+    for(i in 5:nrow(df)) {
+      df_sample <- df %>%
+        sample_n(i)
+      
+      abund_dist <- dist(df_sample)
+      dir <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df_sample)), surveys = df_sample$year)
+      
+      res <- rbind(res, data.frame(n = i, dir = dir))
+      
+    }
+    
+    res
+  }))
+
+dir_sample_plot <- dir_sample_sens %>%
+  select(-data) %>%
+  unnest(cols = c(samplesize))
+
+ggplot(dir_sample_plot, aes(x = n, y = dir, group = stateroute, col = stateroute)) + geom_smooth(se = F, alpha = 0.1) +
+  labs(x = "Years", y = "Directionality")
+ggsave("figures/directionality_sample_size_sensitivity.pdf")
+
+# All species
+log_abund_rsample <- bbs_subset %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  mutate(y1 = case_when(countrynum == 124 ~ 1990,
+                        countrynum == 840 ~ 1992),
+         y2 = case_when(countrynum == 124 ~ 2010,
+                        countrynum == 840 ~ 2016),
+         max_bins = case_when(countrynum == 124 ~ 5,
+                              countrynum == 840 ~ 6)) %>%
+  filter(year >= y1, year <= y2) %>%
+  group_by(countrynum) %>%
+  nest() %>%
+  mutate(year_bins = map2(countrynum, data, ~{
+    country <- .x
+    df <- .y
+    
+    if(country == 124) {
+      df %>%
+        mutate(year_bin = case_when(year >= 1990 & year <= 1993 ~ 1990,
+                                    year >= 1994 & year <= 1997 ~ 1994,
+                                    year >= 1998 & year <= 2001 ~ 1998,
+                                    year >= 2002 & year <= 2005 ~ 2002,
+                                    TRUE ~ 2006))
+    } else {
+      df %>%
+        mutate(year_bin = case_when(year >= 1992 & year <= 1995 ~ 1992,
+                                    year >= 1996 & year <= 1999 ~ 1996,
+                                    year >= 2000 & year <= 2003 ~ 2000,
+                                    year >= 2004 & year <= 2007 ~ 2004,
+                                    year >= 2008 & year <= 2011 ~ 2008,
+                                    year >= 2012 & year <= 2016 ~ 2012))
+    }
+  })) %>%
+  select(-data) %>%
+  unnest(cols = c(year_bins)) %>%
+  group_by(stateroute, aou, year_bin) %>%
+  nest() %>%
+  mutate(log_abund = map(data, ~{
+    df <- .
+    sample <- sample_n(df, 1)
+    log10(sample$speciestotal + 1)
+  }))
+
+log_abund_rsample_wide <- log_abund_rsample %>%
+  dplyr::select(stateroute, aou, year_bin, log_abund) %>%
+  unnest(cols = c(log_abund)) %>%
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0))
+
+dir_rsample_wide <- log_abund_rsample_wide %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(dir = map_dbl(data, ~{
+    df <- .
+      
+    abund_dist <- dist(df)
+    dir <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(df)), surveys = df$year_bin)
+
+  }))
+
+dir_rsample_plot <- dir_rsample_wide %>%
+  select(-data) %>%
+  left_join(dir_all_spp)
+
+ggplot(dir_rsample_plot, aes(x = dir, y = dir_all)) + geom_point() + labs(x = "Directionality (random sample count)", y = "Directionality (average count)")
+ggsave("figures/directionality_averaging_sensitivity.pdf")
+
+## How does taking time window averages impact abundances
 
 ## At each scale (1 route, up to nearest 25 routes within BCR) 
 ## Get max land cover delta from raw land cover data and get trend in Tmin and trend in Tmax

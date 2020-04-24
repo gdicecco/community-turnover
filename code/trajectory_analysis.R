@@ -312,6 +312,66 @@ ggplot(dir_compare, aes(x = dir_all, y = dir_core)) +
   geom_abline(intercept = 0, slope = 1) + labs(x = "Directionality (all spp)", y = "Directionality (excl. transients)")
 ggsave("figures/directionality_all_vs_core.pdf")
 
+### How does species richness impact directionality value?
+
+dir_spp_rich <- dir_core_spp %>%
+  mutate(spp_rich = map_dbl(data, ~{
+    df <- .
+    
+    df_long <- pivot_longer(df, 2:311, names_to = "aou", values_to = "logabund") %>%
+      filter(logabund > 0)
+    
+    length(unique(df_long$aou))
+    
+  }))
+
+dir_all_spp_rich <- dir_all_spp %>%
+  mutate(spp_rich = map_dbl(data, ~{
+    df <- .
+    
+    df_long <- pivot_longer(df, 2:311, names_to = "aou", values_to = "logabund") %>%
+      filter(logabund > 0)
+    
+    length(unique(df_long$aou))
+    
+  }))
+
+excl_trans <- ggplot(dir_spp_rich, aes(x = spp_rich, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
+  labs(x = "Species richness", y = "Directionality (excl. transients)")
+
+all_spp <- ggplot(dir_all_spp_rich, aes(x = spp_rich, y = dir_all)) + geom_point() + geom_smooth(method = "lm", se = F) +
+  labs(x = "Species richness", y = "Directionality (all spp.)")
+
+plot_grid(excl_trans, all_spp, nrow = 1)
+ggsave("figures/directionality_vs_spprich.pdf", units = "in", height = 6, width = 12)
+
+### Pop trends at top and bottom 3% of routes by directionality
+
+top3 <- quantile(dir_core_spp$dir_core, 0.97)
+bottom3 <- quantile(dir_core_spp$dir_core, 0.03)
+
+min_max_dir <- dir_core_spp %>%
+  mutate(pctl = case_when(dir_core >= top3 ~ "Top 3%",
+                          dir_core <= bottom3 ~ "Bottom 3%",
+                          TRUE ~ "middle")) %>%
+  filter(pctl != "middle")
+
+abund_trends <- read.csv("/Users/gracedicecco/Desktop/git/poptrends_envchange/model/BBS_abundance_trends.csv", stringsAsFactors = F)
+
+min_max_dir_abund <- min_max_dir %>%
+  left_join(abund_trends) %>%
+  rename(Directionality = "pctl")
+
+min_max_abundtrend_means <- min_max_dir_abund %>%
+  group_by(pctl) %>%
+  summarize(meantrend = mean(abundTrend, na.rm = T))
+
+ggplot(min_max_dir_abund, aes(x = abundTrend, group = stateroute, col = Directionality, fill = Directionality)) + geom_density(alpha = 0.2) +
+  geom_vline(col = "#F8766D", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "bottom 3%"], cex = 2, lty = 2) +
+  geom_vline(col = "#00BFC4", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "top 3%"], cex = 2, lty = 2) +
+  labs(x = "Abundance trend", y = "Count")
+ggsave("figures/abundtrend_by_directionality.pdf")
+
 ### Compare 5 time points to all years directionality for one route
 
 dir_compare_timepts <- dir_all_spp %>%

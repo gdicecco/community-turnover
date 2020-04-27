@@ -312,6 +312,127 @@ ggplot(dir_compare, aes(x = dir_all, y = dir_core)) +
   geom_abline(intercept = 0, slope = 1) + labs(x = "Directionality (all spp)", y = "Directionality (excl. transients)")
 ggsave("figures/directionality_all_vs_core.pdf")
 
+### How much variance is there in directionality based on delineation of time windows?
+## Pull stateroutes with full time series, try multiple four year time windows
+
+all_years <- bbs_subset %>% 
+  group_by(stateroute) %>% 
+  summarize(n_years = n_distinct(year)) %>%
+  filter(n_years == 26)
+
+yearbins_test <- bbs_subset %>%
+  filter(stateroute %in% all_years$stateroute) %>%
+  mutate(yearbin1 = case_when(year >= 1992 & year <= 1995 ~ 1992,
+                              year >= 1996 & year <= 1999 ~ 1996,
+                              year >= 2000 & year <= 2003 ~ 2000,
+                              year >= 2004 & year <= 2007 ~ 2004,
+                              year >= 2008 & year <= 2011 ~ 2008,
+                              year >= 2012 & year <= 2015 ~ 2012),
+  yearbin2 = case_when(year >= 1991 & year <= 1994 ~ 1992,
+                       year >= 1995 & year <= 1998 ~ 1996,
+                       year >= 1999 & year <= 2002 ~ 2000,
+                       year >= 2003 & year <= 2006 ~ 2004,
+                       year >= 2007 & year <= 2010 ~ 2008,
+                       year >= 2011 & year <= 2014 ~ 2012),
+  yearbin3 = case_when(year >= 1990 & year <= 1993 ~ 1992,
+                       year >= 1994 & year <= 1997 ~ 1996,
+                       year >= 1999 & year <= 2001 ~ 2000,
+                       year >= 2002 & year <= 2005 ~ 2004,
+                       year >= 2006 & year <= 2009 ~ 2008,
+                       year >= 2010 & year <= 2013 ~ 2012),
+  yearbin4 = case_when(year >= 1993 & year <= 1996 ~ 1992,
+                       year >= 1997 & year <= 2000 ~ 1996,
+                       year >= 2001 & year <= 2004 ~ 2000,
+                       year >= 2005 & year <= 2008 ~ 2004,
+                       year >= 2009 & year <= 2012 ~ 2008,
+                       year >= 2013 & year <= 2016 ~ 2012))
+
+dir_yearbin1 <- yearbins_test %>%
+  filter(!is.na(yearbin1)) %>%
+  group_by(stateroute, aou, yearbin1) %>%
+  summarize(n_years = n_distinct(year),
+            mean_abund = mean(speciestotal) + 1,
+            log_abund = log10(mean_abund)) %>%
+  filter(n_years > 1) %>%
+  dplyr::select(stateroute, aou, yearbin1, log_abund) %>%
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0)) %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(dir_yb1 = map_dbl(data, ~{
+    df <- .
+    dist <- dist(df[, -1])
+    trajectoryDirectionality(dist, sites = rep(1, nrow(df)), surveys = df$yearbin1)
+  }))
+
+dir_yearbin2 <- yearbins_test %>%
+  filter(!is.na(yearbin2)) %>%
+  group_by(stateroute, aou, yearbin2) %>%
+  summarize(n_years = n_distinct(year),
+            mean_abund = mean(speciestotal) + 1,
+            log_abund = log10(mean_abund)) %>%
+  filter(n_years > 1) %>%
+  dplyr::select(stateroute, aou, yearbin2, log_abund) %>%
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0)) %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(dir_yb2 = map_dbl(data, ~{
+    df <- .
+    dist <- dist(df[, -1])
+    trajectoryDirectionality(dist, sites = rep(1, nrow(df)), surveys = df$yearbin2)
+  }))
+
+dir_yearbin3 <- yearbins_test %>%
+  filter(!is.na(yearbin3)) %>%
+  group_by(stateroute, aou, yearbin3) %>%
+  summarize(n_years = n_distinct(year),
+            mean_abund = mean(speciestotal) + 1,
+            log_abund = log10(mean_abund)) %>%
+  filter(n_years > 1) %>%
+  dplyr::select(stateroute, aou, yearbin3, log_abund) %>%
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0)) %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(dir_yb3 = map_dbl(data, ~{
+    df <- .
+    dist <- dist(df[, -1])
+    trajectoryDirectionality(dist, sites = rep(1, nrow(df)), surveys = df$yearbin3)
+  }))
+
+dir_yearbin4 <- yearbins_test %>%
+  filter(!is.na(yearbin4)) %>%
+  group_by(stateroute, aou, yearbin4) %>%
+  summarize(n_years = n_distinct(year),
+            mean_abund = mean(speciestotal) + 1,
+            log_abund = log10(mean_abund)) %>%
+  filter(n_years > 1) %>%
+  dplyr::select(stateroute, aou, yearbin4, log_abund) %>%
+  pivot_wider(names_from = aou, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0)) %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(dir_yb4 = map_dbl(data, ~{
+    df <- .
+    dist <- dist(df[, -1])
+    trajectoryDirectionality(dist, sites = rep(1, nrow(df)), surveys = df$yearbin4)
+  }))
+
+compare_yearbins <- dir_yearbin1 %>%
+  left_join(select(dir_yearbin2, -data)) %>%
+  left_join(select(dir_yearbin3, -data)) %>%
+  left_join(select(dir_yearbin4, -data)) %>%
+  select(-data) %>%
+  pivot_longer(2:5, names_to = "yearbin", values_to = "dir") %>%
+  group_by(stateroute) %>%
+  summarize(dir_mean = mean(dir, na.rm = T),
+            dir_min = min(dir, na.rm = T), 
+            dir_max = max(dir, na.rm = T))
+
+ggplot(compare_yearbins, aes(x = fct_reorder(as.factor(stateroute), dir_mean), y = dir_mean)) + 
+  geom_point() +
+  geom_errorbar(aes(ymin = dir_min, ymax = dir_max)) +
+  theme(axis.text.x = element_blank()) +
+  labs(x = "BBS routes", y = "Mean directionality")
+ggsave("figures/directionality_range_by_yearbin.pdf", units = "in", width = 12, height = 8)
+
 ### How does species richness impact directionality value?
 
 dir_spp_rich <- dir_core_spp %>%

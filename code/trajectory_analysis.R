@@ -607,6 +607,32 @@ ggplot(dir_compare_manual, aes(x = dir_manual)) +
   labs(x = "Distance between first and last points/Cumulative distance", y = "Count")
 ggsave("figures/manual_directionality_histogram.pdf")
 
+### Pop trends at top and bottom 3% of routes for manual directionality
+
+top3_manual <- quantile(dir_manual_all_spp$dir_manual, 0.97)
+bottom3_manual <- quantile(dir_manual_all_spp$dir_manual, 0.03)
+
+manual_dir_min_max <- dir_manual_all_spp %>%
+  mutate(pctl = case_when(dir_manual >= top3_manual ~ "Top 3%",
+                          dir_manual <= bottom3_manual ~ "Bottom 3%",
+                          TRUE ~ "middle")) %>%
+  filter(pctl != "middle")
+
+min_max_dir_manual_abund <- manual_dir_min_max %>%
+  left_join(abund_trends) %>%
+  rename(Directionality = "pctl")
+
+min_max_manual_means <- min_max_dir_manual_abund %>%
+  group_by(Directionality) %>%
+  summarize(meantrend = mean(abundTrend, na.rm = T))
+
+ggplot(min_max_dir_manual_abund, aes(x = abundTrend, group = stateroute, col = Directionality, fill = Directionality)) + geom_density(alpha = 0.2) +
+  geom_vline(col = "#F8766D", xintercept = min_max_manual_means$meantrend[min_max_manual_means$Directionality == "Bottom 3%"], cex = 2, lty = 2) +
+  geom_vline(col = "#00BFC4", xintercept = min_max_manual_means$meantrend[min_max_manual_means$Directionality == "Top 3%"], cex = 2, lty = 2) +
+  labs(x = "Abundance trend", y = "Count")
+ggsave("figures/abundtrend_by_manual_directionality.pdf")
+
+  
 ## Determine trajectoryDirectionality for time series sensitivity
 ## Subsample time points: 5 years up to 15-20
 

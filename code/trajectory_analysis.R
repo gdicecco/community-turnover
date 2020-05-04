@@ -484,14 +484,100 @@ min_max_dir_abund <- min_max_dir %>%
   rename(Directionality = "pctl")
 
 min_max_abundtrend_means <- min_max_dir_abund %>%
-  group_by(pctl) %>%
+  group_by(Directionality) %>%
   summarize(meantrend = mean(abundTrend, na.rm = T))
 
 ggplot(min_max_dir_abund, aes(x = abundTrend, group = stateroute, col = Directionality, fill = Directionality)) + geom_density(alpha = 0.2) +
-  geom_vline(col = "#F8766D", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "bottom 3%"], cex = 2, lty = 2) +
-  geom_vline(col = "#00BFC4", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "top 3%"], cex = 2, lty = 2) +
-  labs(x = "Abundance trend", y = "Count")
-ggsave("figures/abundtrend_by_directionality.pdf")
+  geom_vline(col = "#F8766D", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "Bottom 3%"], cex = 2, lty = 2) +
+  geom_vline(col = "#00BFC4", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "Top 3%"], cex = 2, lty = 2) +
+  labs(x = "Abundance trend", y = "Count", title = "Excl. transient species")
+ggsave("figures/abundtrend_by_directionality_notrans.pdf")
+
+## All spp
+top3 <- quantile(dir_all_spp$dir_all, 0.97)
+bottom3 <- quantile(dir_all_spp$dir_all, 0.03)
+
+min_max_dir <- dir_all_spp %>%
+  mutate(pctl = case_when(dir_all >= top3 ~ "Top 3%",
+                          dir_all <= bottom3 ~ "Bottom 3%",
+                          TRUE ~ "middle")) %>%
+  filter(pctl != "middle")
+
+min_max_dir_abund <- min_max_dir %>%
+  left_join(abund_trends) %>%
+  rename(Directionality = "pctl")
+
+min_max_abundtrend_means <- min_max_dir_abund %>%
+  group_by(Directionality) %>%
+  summarize(meantrend = mean(abundTrend, na.rm = T))
+
+ggplot(min_max_dir_abund, aes(x = abundTrend, group = stateroute, col = Directionality, fill = Directionality)) + geom_density(alpha = 0.2) +
+  geom_vline(col = "#F8766D", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "Bottom 3%"], cex = 2, lty = 2) +
+  geom_vline(col = "#00BFC4", xintercept = min_max_abundtrend_means$meantrend[min_max_abundtrend_means$Directionality == "Top 3%"], cex = 2, lty = 2) +
+  labs(x = "Abundance trend", y = "Count", title = "All species")
+ggsave("figures/abundtrend_by_directionality_allspp.pdf")
+
+## Jaccard for top and bottom 3% of routes - no transient spp vs all spp
+
+# All species
+top3 <- quantile(dir_all_spp$dir_all, 0.97)
+bottom3 <- quantile(dir_all_spp$dir_all, 0.03)
+
+min_max_dir <- dir_all_spp %>%
+  mutate(pctl = case_when(dir_all >= top3 ~ "Top 3%",
+                          dir_all <= bottom3 ~ "Bottom 3%",
+                          TRUE ~ "middle")) %>%
+  filter(pctl != "middle")
+
+j_all <- min_max_dir %>%
+  mutate(j = map_dbl(data, ~{
+    df <- .
+    df_long <- df %>%
+      pivot_longer(2:337, names_to = "aou", values_to = "abund") %>%
+      filter(abund > 0)
+    
+    early_spec <- unique(filter(df_long, year_bin == min(year_bin))$aou)
+    late_spec <- unique(filter(df_long, year_bin == max(year_bin))$aou)
+    
+    shared_spec <- length(late_spec[late_spec %in% early_spec])
+    union_spec <- length(unique(c(late_spec, early_spec)))
+    
+    shared_spec/union_spec
+  }))
+
+ggplot(j_all, aes(x = pctl, y = j, fill = pctl)) + geom_violin(draw_quantiles = c(0.5)) +
+  labs(x = "", y = "Jaccard similarity", fill = "Directionality", title = "All species")
+ggsave("figures/jaccard_by_directionality_allspp.pdf")
+
+# No transient species
+top3_core <- quantile(dir_core_spp$dir_core, 0.97)
+bottom3_core <- quantile(dir_core_spp$dir_core, 0.03)
+
+min_max_dir_core <- dir_core_spp %>%
+  mutate(pctl = case_when(dir_core >= top3_core ~ "Top 3%",
+                          dir_core <= bottom3_core ~ "Bottom 3%",
+                          TRUE ~ "middle")) %>%
+  filter(pctl != "middle")
+
+j_core <- min_max_dir_core %>%
+  mutate(j = map_dbl(data, ~{
+    df <- .
+    df_long <- df %>%
+      pivot_longer(2:311, names_to = "aou", values_to = "abund") %>%
+      filter(abund > 0)
+    
+    early_spec <- unique(filter(df_long, year_bin == min(year_bin))$aou)
+    late_spec <- unique(filter(df_long, year_bin == max(year_bin))$aou)
+    
+    shared_spec <- length(late_spec[late_spec %in% early_spec])
+    union_spec <- length(unique(c(late_spec, early_spec)))
+    
+    shared_spec/union_spec
+  }))
+
+ggplot(j_core, aes(x = pctl, y = j, fill = pctl)) + geom_violin(draw_quantiles = c(0.5)) +
+  labs(x = "", y = "Jaccard similarity", fill = "Directionality", title = "Excl. transients")
+ggsave("figures/jaccard_by_directionality_notrans.pdf")
 
 ### Compare 5 time points to all years directionality for one route
 
@@ -629,9 +715,89 @@ min_max_manual_means <- min_max_dir_manual_abund %>%
 ggplot(min_max_dir_manual_abund, aes(x = abundTrend, group = stateroute, col = Directionality, fill = Directionality)) + geom_density(alpha = 0.2) +
   geom_vline(col = "#F8766D", xintercept = min_max_manual_means$meantrend[min_max_manual_means$Directionality == "Bottom 3%"], cex = 2, lty = 2) +
   geom_vline(col = "#00BFC4", xintercept = min_max_manual_means$meantrend[min_max_manual_means$Directionality == "Top 3%"], cex = 2, lty = 2) +
-  labs(x = "Abundance trend", y = "Count")
+  labs(x = "Abundance trend", y = "Count", title = "All species")
 ggsave("figures/abundtrend_by_manual_directionality.pdf")
 
+### Pop trends at top and bottom 3% of routes for manual directionality - no transient species
+
+dir_manual_core_spp <- log_abund_core %>%
+  group_by(stateroute) %>%
+  nest() %>%
+  mutate(pcoa_all = map(data, ~{
+    df <- .
+    dist <- dist(df[, -1])
+    pcoa <- trajectoryPCoA(dist, sites = rep(1, nrow(df)), surveys = df$year_bin)
+  }),
+  dir_manual = map_dbl(pcoa_all, ~{
+    pcoa <- .
+    points <- pcoa$points
+    directionality_manual(points)
+  }))
+
+top3_core_manual <- quantile(dir_manual_core_spp$dir_manual, 0.97)
+bottom3_core_manual <- quantile(dir_manual_core_spp$dir_manual, 0.03)
+
+manual_dir_min_max_core <- dir_manual_core_spp %>%
+  mutate(pctl = case_when(dir_manual >= top3_core_manual ~ "Top 3%",
+                          dir_manual <= bottom3_core_manual ~ "Bottom 3%",
+                          TRUE ~ "middle")) %>%
+  filter(pctl != "middle")
+
+min_max_dir_manual_abund_core <- manual_dir_min_max_core %>%
+  left_join(abund_trends) %>%
+  rename(Directionality = "pctl")
+
+min_max_manual_means_core <- min_max_dir_manual_abund_core %>%
+  group_by(Directionality) %>%
+  summarize(meantrend = mean(abundTrend, na.rm = T))
+
+ggplot(min_max_dir_manual_abund_core, aes(x = abundTrend, group = stateroute, col = Directionality, fill = Directionality)) + geom_density(alpha = 0.2) +
+  geom_vline(col = "#F8766D", xintercept = min_max_manual_means_core$meantrend[min_max_manual_means_core$Directionality == "Bottom 3%"], cex = 2, lty = 2) +
+  geom_vline(col = "#00BFC4", xintercept = min_max_manual_means_core$meantrend[min_max_manual_means_core$Directionality == "Top 3%"], cex = 2, lty = 2) +
+  labs(x = "Abundance trend", y = "Count", title = "Excl. transient species")
+ggsave("figures/abundtrend_by_manual_directionality_notrans.pdf")
+
+## Jaccard for top and bottom 3% of routes with manual directionality - no transient spp vs all spp
+
+j_all <- manual_dir_min_max %>%
+  mutate(j = map_dbl(data, ~{
+    df <- .
+    df_long <- df %>%
+      pivot_longer(2:337, names_to = "aou", values_to = "abund") %>%
+      filter(abund > 0)
+    
+    early_spec <- unique(filter(df_long, year_bin == min(year_bin))$aou)
+    late_spec <- unique(filter(df_long, year_bin == max(year_bin))$aou)
+    
+    shared_spec <- length(late_spec[late_spec %in% early_spec])
+    union_spec <- length(unique(c(late_spec, early_spec)))
+  
+    shared_spec/union_spec
+  }))
+
+ggplot(j_all, aes(x = pctl, y = j, fill = pctl)) + geom_violin(draw_quantiles = c(0.5)) +
+  labs(x = "", y = "Jaccard similarity", fill = "Manual directionality", title = "All species")
+ggsave("figures/jaccard_by_manual_directionality_allspp.pdf")
+
+j_core <- manual_dir_min_max_core %>%
+  mutate(j = map_dbl(data, ~{
+    df <- .
+    df_long <- df %>%
+      pivot_longer(2:311, names_to = "aou", values_to = "abund") %>%
+      filter(abund > 0)
+    
+    early_spec <- unique(filter(df_long, year_bin == min(year_bin))$aou)
+    late_spec <- unique(filter(df_long, year_bin == max(year_bin))$aou)
+    
+    shared_spec <- length(late_spec[late_spec %in% early_spec])
+    union_spec <- length(unique(c(late_spec, early_spec)))
+    
+    shared_spec/union_spec
+  }))
+
+ggplot(j_core, aes(x = pctl, y = j, fill = pctl)) + geom_violin(draw_quantiles = c(0.5)) +
+  labs(x = "", y = "Jaccard similarity", fill = "Manual directionality", title = "Excl. transients")
+ggsave("figures/jaccard_by_manual_directionality_notrans.pdf")
   
 ## Determine trajectoryDirectionality for time series sensitivity
 ## Subsample time points: 5 years up to 15-20

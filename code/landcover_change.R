@@ -8,6 +8,29 @@ library(tmap)
 
 bbs_halfroutes <- read.csv("/Volumes/hurlbertlab/DiCecco/data/bbs_half_routes_fragstats.csv", stringsAsFactors = F)
 
+# Landcover legend US
+newcode <- data.frame(Code = seq(1,9), 
+                      Label = c("Open water", "Urban", "Barren", "Forest", "Shrubland", 
+                                "Agricultural", "Grasslands", "Wetlands", "Perennial ice, snow"))
+
+# Landcover legend Canada
+ca_codes <- read.csv("data/canada_landcover_classification.csv", stringsAsFactors = F) %>%
+  select(-Definition)
+
+landcover_legend <- bind_rows(newcode, ca_codes)
+
+## Create common legend US/Canada
+
+landcover_common_legend <- landcover_legend %>%
+  mutate(common_label = case_when(Label == "Open water" | Label == "Water" ~ "Water",
+                                  Label %in% c("Forest", "Forest Wetland", "Trees", "Treed Wetland") ~ "Forest",
+                                  Label %in% c("Urban", "Settlement", "Roads") ~ "Urban",
+                                  Label %in% c("Agricultural", "Cropland") ~ "Agricultural",
+                                  Label %in% c("Grasslands", "Grassland Managed", "Grassland Unmanaged") ~ "Grasslands",
+                                  Label %in% c("Wetlands", "Wetland", "Wetland Shrub", "Wetland Herb") ~ "Wetlands",
+                                  TRUE ~ Label))
+# write.csv(landcover_common_legend, "data/landcover_code_common_legend_US_Canada.csv", row.names = F)
+
 ## Measure land cover change as max delta at each route
 
 # Function to calculate the class with the maximum change in proportion landscape from earliest to late time period
@@ -16,19 +39,20 @@ max_delta <- function(df) {
     filter(year == min_year | year == max_year) %>%
     mutate(year_name = case_when(year == min_year ~ "year1",
                                  year == max_year ~ "year2")) %>%
-    select(year_name, class, prop.landscape) %>%
+    left_join(landcover_common_legend, by = c("class" = "Code")) %>%
+    select(year_name, common_label, prop.landscape) %>%
     distinct() %>%
     pivot_wider(names_from = year_name, values_from = prop.landscape) %>%
     replace_na(list(year1 = 0, year2 = 0)) %>%
     mutate(deltaCover = year2 - year1) %>%
     mutate(absCover = abs(deltaCover)) %>%
     filter(absCover == max(absCover)) %>%
-    select(class, deltaCover)
+    select(common_label, deltaCover)
   
   return(delta)
 }
 
-possibly_max_delta <- possibly(max_delta, data.frame(class = NA, deltaCover = NA))
+possibly_max_delta <- possibly(max_delta, data.frame(common_label = NA, deltaCover = NA))
 
 bbs_maxdeltas <- bbs_halfroutes %>%
   mutate(min_year = case_when(country == "US" ~ 1992,
@@ -39,7 +63,9 @@ bbs_maxdeltas <- bbs_halfroutes %>%
   nest() %>%
   mutate(maxDelta = map(data, ~possibly_max_delta(.))) %>%
   select(-data) %>%
-  unnest()
+  unnest() %>%
+  mutate_at(c("deltaCover"), ~case_when(country == "US" ~ ./25,
+                                        country == "Canada" ~ ./21))
 # write.csv(bbs_maxdeltas, "data/bbs_half_route_max_land_change.csv", row.names = F)
 
 # Correlation between max land cover values for half routes
@@ -76,17 +102,6 @@ oneroute_maxdeltas <- landcover_na %>%
 # write.csv(oneroute_maxdeltas, "data/bbs_route_max_landcover_change.csv", row.names = F)
 
 # Category of maximum land cover change
-
-# Landcover legend US
-newcode <- data.frame(Code = seq(1,9), 
-                      Label = c("Open water", "Urban", "Barren", "Forest", "Shrubland", 
-                                 "Agricultural", "Grasslands", "Wetlands", "Perennial ice, snow"))
-
-# Landcover legend Canada
-ca_codes <- read.csv("data/canada_landcover_classification.csv", stringsAsFactors = F) %>%
-  select(-Definition)
-
-landcover_legend <- bind_rows(newcode, ca_codes)
 
 oneroute_plot <- oneroute_maxdeltas %>%
   na.omit() %>%

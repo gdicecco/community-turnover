@@ -47,6 +47,10 @@ landcover_na <- bind_rows(landcover_us, landcover_ca) %>%
          max_year = case_when(country == "US" ~ 2016,
                               TRUE ~ 2010))
 
+## Land cover legend - classes in common between US and Canadian classifications
+
+landcover_common_legend <- read.csv("data/landcover_code_common_legend_US_Canada.csv", stringsAsFactors = F)
+
 # Function to calculate the class with the maximum change in proportion landscape from earliest to late time period
 ## If multiple stateroutes are present (for scale model) - sums area across classes pooling stateroutes, calculates prop landscape for summed area
 max_delta <- function(df) {
@@ -54,23 +58,24 @@ max_delta <- function(df) {
     filter(year == min_year | year == max_year) %>%
     mutate(year_name = case_when(year == min_year ~ "year1",
                                  year == max_year ~ "year2")) %>%
-    group_by(year_name, class) %>%
-    summarize(sum.total.area = sum(total.area)) %>%
+    left_join(landcover_common_legend, by = c("class" = "Code")) %>%
+    group_by(year_name, common_label) %>%
+    summarize(sum.total.area = sum(total.area)/(max_year - min_year)) %>%
     group_by(year_name) %>%
     mutate(prop.landscape = sum.total.area/sum(sum.total.area)) %>%
-    select(year_name, class, prop.landscape) %>%
+    select(year_name, common_label, prop.landscape) %>%
     distinct() %>%
     pivot_wider(names_from = year_name, values_from = prop.landscape) %>%
     replace_na(list(year1 = 0, year2 = 0)) %>%
     mutate(deltaCover = year2 - year1) %>%
     mutate(absCover = abs(deltaCover)) %>%
     filter(absCover == max(absCover)) %>%
-    select(class, deltaCover)
+    select(common_label, deltaCover)
   
   return(delta)
 }
 
-possibly_max_delta <- possibly(max_delta, data.frame(class = NA, deltaCover = NA))
+possibly_max_delta <- possibly(max_delta, data.frame(common_label = NA, deltaCover = NA))
 
 ## Climate trends
 

@@ -199,9 +199,30 @@ ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr),
   labs(x = "Scale (routes)", y = "Mean distance between routes (km)", col = "BCR")
 # ggsave("figures/scale_aggregated_routes.pdf")
 
+# % overlap of aggregated stateroutes at each spatial scale x bcr
+
+pct_overlap <- mean_bbs_distances %>%
+  filter(scale > 1) %>%
+  select(-stateroute) %>%
+  unnest(model_input) %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  group_by(scale, bcr) %>%
+  count(stateroute) %>%
+  left_join(bcr_subset) %>%
+  mutate(pct_reps = n/n_routes)
+
+mean_pct_overlap <- pct_overlap %>%
+  group_by(bcr, scale) %>%
+  summarize(mean_reps = mean(pct_reps))
+
+ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.factor(bcr), group = as.factor(bcr))) + 
+  geom_line() +
+  labs(x = "Scale (routes)", y = "Avg percent of aggregates stateroute occurs in", col = "BCR")
+ggsave("figures/percent_overlap_aggregates.pdf")
+
 ## Model for 1/2 routes
 
-#### Need half route climate, land cover, BBS data at stop level!!
+#### Need half BBS data at stop level!!
 
 ## Model from 1 route up to nearest 25 routes
 ## One data point per 4 year time window

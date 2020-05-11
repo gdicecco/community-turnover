@@ -33,3 +33,18 @@ spatial_corr <- scale_model_input %>%
   unnest(moransI)
 
 write.csv(spatial_corr, "/proj/hurlbertlab/gdicecco/community-turnover/data/scale_model_vars_moransI.csv", row.names = F)
+
+## Plot spatial autocorrelation for env vars, lines for different scales, facet by variable
+
+spatial_corr <- read.csv("data/scale_model_vars_moransI.csv", stringsAsFactors = F)
+
+spatial_corr_long <- spatial_corr %>%
+  pivot_longer(lc:tmin, names_to = "env", values_to = "moransI") %>%
+  filter(mean.of.class < 4000)
+
+ggplot(spatial_corr_long, aes(x = mean.of.class, y = moransI, col = scale, group = scale)) + 
+  geom_line() + 
+  facet_wrap(~env) + theme_bw(base_size = 15) +
+  geom_hline(yintercept = 0) +
+  labs(x = "Distance (km)", y = "Moran's I", col = "Scale (routes)")
+ggsave("figures/env_vars_moransI.pdf", units = "in", height = 6, width = 18)

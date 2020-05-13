@@ -320,7 +320,7 @@ log_abund_core <- bbs_subset %>%
 ## Fit models across BBS routes for each scale (1:25)
 ## Variance partitioning of land cover and climate variables explaining trajectory 
 ## Directionality ~ tmin + tmax + max(deltaLandCover)
-## Variance partitioning with ecospat.varpat(model.1, model.2, model.12) in ecospat
+## Variance partitioning 
 
 na_climate <- filter(bbs_climate_avgs, is.na(mean_tmax) | is.na(mean_tmin))
 
@@ -388,7 +388,7 @@ scale_model_variables <- scale_model_input %>%
   group_by(scale) %>%
   nest()
 
-# Join 1/2 route data
+# Here need to join 1/2 route data
 
 scale_model_variables_unnest <- scale_model_variables %>%
   unnest(cols = c(data))
@@ -435,3 +435,321 @@ ggplot(filter(scale_model_plot, deviance == "part1" | deviance == "part2"), aes(
   scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/scale_model_variance.pdf")
+
+#### Scale model with low/no overlap ####
+
+scale_25 <- mean_bbs_distances %>%
+  filter(scale == 25) %>%
+  select(-stateroute) %>%
+  unnest(model_input) %>%
+  group_by(focal_rte, bcr, scale) %>%
+  nest()
+
+# What is the maximum number of focal routes per BCR assuming 25 aggregated routes, no more than 40% overlap (10 routes)?
+max_focal_rtes <- bcr_subset %>%
+  st_set_geometry(NULL) %>%
+  mutate(max_focal_rtes = floor(1 + (n_routes - 25)/15))
+# 33 data points total
+
+large_bcrs <- max_focal_rtes %>%
+  filter(max_focal_rtes > 1)
+
+# For BCRs with more than one focal route, sample x routes and calculate pairwise overlap of aggregated 25 nearest routes 100x
+# Select x focal routes with min pairwise overlap
+
+two_rtes <- large_bcrs %>%
+  filter(max_focal_rtes == 2)
+
+min_overlap_rtes <- data.frame(bcr = rep(NA, 7), focal_rte1 = rep(NA, 7), focal_rte2 = rep(NA, 7), overlap = rep(NA, 7))
+
+for(i in 1:7) {
+  b <- two_rtes[[i, 1]]
+  
+  rtes <- filter(scale_25, bcr == b)
+  
+  res <- data.frame(stateroute1 = rep(NA, 100), stateroute2 = rep(NA, 100), overlap = rep(NA, 100))
+  
+  for(j in 1:100) {
+    focal_rtes <- sample(rtes$focal_rte, 2)
+    rte1 <- focal_rtes[[1]]
+    rte2 <- focal_rtes[[2]]
+    
+    rte_list1 <- scale_25 %>%
+      filter(focal_rte == rte1) %>%
+      unnest(data)
+    
+    rte_list2 <- scale_25 %>%
+      filter(focal_rte == rte2) %>%
+      unnest(data)
+    
+    ovlp <- sum(rte_list1$stateroute %in% rte_list2$stateroute)/25
+    
+    res[j, 1] <- rte1
+    res[j, 2] <- rte2
+    res[j, 3] <- ovlp
+  }
+  
+  best_pair <- filter(res, overlap == min(overlap))
+  
+  min_overlap_rtes[i, 1] <- b
+  min_overlap_rtes[i, 2] <- best_pair$stateroute1[[1]]
+  min_overlap_rtes[i, 3] <- best_pair$stateroute2[[1]]
+  min_overlap_rtes[i, 4] <- best_pair$overlap[[1]]
+  
+}
+
+
+three_rtes <- large_bcrs %>%
+  filter(max_focal_rtes == 3)
+
+min_overlap_3rtes <- data.frame(bcr = rep(NA, 2), 
+                               focal_rte1 = rep(NA, 2), focal_rte2 = rep(NA, 2), focal_rte3 = rep(NA, 2),
+                               overlap = rep(NA, 2))
+
+for(i in 1:2) {
+  b <- three_rtes[[i, 1]]
+  
+  rtes <- filter(scale_25, bcr == b)
+  
+  res <- data.frame(stateroute1 = rep(NA, 1000), stateroute2 = rep(NA, 1000), stateroute3 = rep(NA, 1000), 
+                    max.overlap = rep(NA, 1000), mean.overlap = rep(NA, 1000))
+  
+  for(j in 1:1000) {
+    focal_rtes <- sample(rtes$focal_rte, 3)
+    rte1 <- focal_rtes[[1]]
+    rte2 <- focal_rtes[[2]]
+    rte3 <- focal_rtes[[3]]
+    
+    rte_list1 <- scale_25 %>%
+      filter(focal_rte == rte1) %>%
+      unnest(data)
+    
+    rte_list2 <- scale_25 %>%
+      filter(focal_rte == rte2) %>%
+      unnest(data)
+    
+    rte_list3 <- scale_25 %>%
+      filter(focal_rte == rte3) %>%
+      unnest(data)
+    
+    max.ovlp <- max(c(sum(rte_list1$stateroute %in% rte_list2$stateroute), 
+                       sum(rte_list1$stateroute %in% rte_list3$stateroute), 
+                       sum(rte_list2$stateroute %in% rte_list3$stateroute)))
+    mean.ovlp <- mean(c(sum(rte_list1$stateroute %in% rte_list2$stateroute), 
+                        sum(rte_list1$stateroute %in% rte_list3$stateroute), 
+                        sum(rte_list2$stateroute %in% rte_list3$stateroute)))/25
+    
+    res[j, 1] <- rte1
+    res[j, 2] <- rte2
+    res[j, 3] <- rte3
+    res[j, 4] <- max.ovlp
+    res[j, 5] <- mean.ovlp
+  }
+  
+  best_pair <- filter(res, max.overlap <= 10, mean.overlap == min(mean.overlap))
+  
+  min_overlap_3rtes[i, 1] <- b
+  min_overlap_3rtes[i, 2] <- best_pair$stateroute1[[1]]
+  min_overlap_3rtes[i, 3] <- best_pair$stateroute2[[1]]
+  min_overlap_3rtes[i, 4] <- best_pair$stateroute3[[1]]
+  min_overlap_3rtes[i, 5] <- best_pair$mean.overlap[[1]]
+  
+}
+
+# Four routes - BCR 22
+
+rtes <- filter(scale_25, bcr == 22)
+
+res <- data.frame(stateroute1 = rep(NA, 1000), stateroute2 = rep(NA, 1000), stateroute3 = rep(NA, 1000), stateroute4 = rep(NA, 1000), 
+                  max.overlap = rep(NA, 1000), mean.overlap = rep(NA, 1000))
+
+for(j in 1:1000) {
+  focal_rtes <- sample(rtes$focal_rte, 4)
+  rte1 <- focal_rtes[[1]]
+  rte2 <- focal_rtes[[2]]
+  rte3 <- focal_rtes[[3]]
+  rte4 <- focal_rtes[[4]]
+  
+  rte_list1 <- scale_25 %>%
+    filter(focal_rte == rte1) %>%
+    unnest(data)
+  
+  rte_list2 <- scale_25 %>%
+    filter(focal_rte == rte2) %>%
+    unnest(data)
+  
+  rte_list3 <- scale_25 %>%
+    filter(focal_rte == rte3) %>%
+    unnest(data)
+  
+  rte_list4 <- scale_25 %>%
+    filter(focal_rte == rte4) %>%
+    unnest(data)
+  
+  max.ovlp <- max(c(sum(rte_list1$stateroute %in% rte_list2$stateroute), 
+                    sum(rte_list1$stateroute %in% rte_list3$stateroute),
+                    sum(rte_list1$stateroute %in% rte_list4$stateroute),
+                    sum(rte_list2$stateroute %in% rte_list3$stateroute),
+                    sum(rte_list2$stateroute %in% rte_list4$stateroute),
+                    sum(rte_list3$stateroute %in% rte_list4$stateroute)))
+  mean.ovlp <- mean(c(sum(rte_list1$stateroute %in% rte_list2$stateroute), 
+                      sum(rte_list1$stateroute %in% rte_list3$stateroute),
+                      sum(rte_list1$stateroute %in% rte_list4$stateroute),
+                      sum(rte_list2$stateroute %in% rte_list3$stateroute),
+                      sum(rte_list2$stateroute %in% rte_list4$stateroute),
+                      sum(rte_list3$stateroute %in% rte_list4$stateroute)))/25
+  
+  res[j, 1] <- rte1
+  res[j, 2] <- rte2
+  res[j, 3] <- rte3
+  res[j, 4] <- rte4
+  res[j, 5] <- max.ovlp
+  res[j, 6] <- mean.ovlp
+}
+
+best_pair_4 <- filter(res, max.overlap <= 10, mean.overlap == min(mean.overlap)) %>%
+  slice(1:1)
+
+# Five routes - BCR 28
+
+rtes <- filter(scale_25, bcr == 28)
+
+res <- data.frame(stateroute1 = rep(NA, 10000), stateroute2 = rep(NA, 10000), 
+                  stateroute3 = rep(NA, 10000), stateroute4 = rep(NA, 10000), stateroute5 = rep(NA, 10000),
+                  max.overlap = rep(NA, 10000), mean.overlap = rep(NA, 10000))
+
+for(j in 1:10000) {
+  focal_rtes <- sample(rtes$focal_rte, 5)
+  rte1 <- focal_rtes[[1]]
+  rte2 <- focal_rtes[[2]]
+  rte3 <- focal_rtes[[3]]
+  rte4 <- focal_rtes[[4]]
+  rte5 <- focal_rtes[[5]]
+  
+  rte_list1 <- scale_25 %>%
+    filter(focal_rte == rte1) %>%
+    unnest(data)
+  
+  rte_list2 <- scale_25 %>%
+    filter(focal_rte == rte2) %>%
+    unnest(data)
+  
+  rte_list3 <- scale_25 %>%
+    filter(focal_rte == rte3) %>%
+    unnest(data)
+  
+  rte_list4 <- scale_25 %>%
+    filter(focal_rte == rte4) %>%
+    unnest(data)
+  
+  rte_list5 <- scale_25 %>%
+    filter(focal_rte == rte5) %>%
+    unnest(data)
+  
+  max.ovlp <- max(c(sum(rte_list1$stateroute %in% rte_list2$stateroute), 
+                    sum(rte_list1$stateroute %in% rte_list3$stateroute),
+                    sum(rte_list1$stateroute %in% rte_list4$stateroute),
+                    sum(rte_list1$stateroute %in% rte_list5$stateroute),
+                    sum(rte_list2$stateroute %in% rte_list3$stateroute),
+                    sum(rte_list2$stateroute %in% rte_list4$stateroute),
+                    sum(rte_list2$stateroute %in% rte_list5$stateroute),
+                    sum(rte_list3$stateroute %in% rte_list4$stateroute),
+                    sum(rte_list3$stateroute %in% rte_list5$stateroute),
+                    sum(rte_list4$stateroute %in% rte_list5$stateroute)))
+  mean.ovlp <- mean(c(sum(rte_list1$stateroute %in% rte_list2$stateroute), 
+                      sum(rte_list1$stateroute %in% rte_list3$stateroute),
+                      sum(rte_list1$stateroute %in% rte_list4$stateroute),
+                      sum(rte_list1$stateroute %in% rte_list5$stateroute),
+                      sum(rte_list2$stateroute %in% rte_list3$stateroute),
+                      sum(rte_list2$stateroute %in% rte_list4$stateroute),
+                      sum(rte_list2$stateroute %in% rte_list5$stateroute),
+                      sum(rte_list3$stateroute %in% rte_list4$stateroute),
+                      sum(rte_list3$stateroute %in% rte_list5$stateroute),
+                      sum(rte_list4$stateroute %in% rte_list5$stateroute)))/25
+  
+  res[j, 1] <- rte1
+  res[j, 2] <- rte2
+  res[j, 3] <- rte3
+  res[j, 4] <- rte4
+  res[j, 5] <- rte5
+  res[j, 6] <- max.ovlp
+  res[j, 7] <- mean.ovlp
+}
+
+best_pair_5 <- filter(res, max.overlap <= 10, mean.overlap == min(mean.overlap)) %>%
+  slice(1:1)
+
+## List of focal routes with low overlap
+
+one_focal_rte <- max_focal_rtes %>%
+  filter(max_focal_rtes == 1)
+
+focal_routes_1 <- scale_25 %>%
+  filter(bcr %in% one_focal_rte$bcr) %>%
+  group_by(bcr) %>%
+  sample_n(1) %>%
+  select(-scale, -data) %>%
+  mutate(rte = "stateroute1")
+
+best_routes_2 <- min_overlap_rtes %>%
+  pivot_longer(2:3, names_to = "rte", values_to = "focal_rte")
+
+best_routes_3 <- min_overlap_3rtes %>%
+  pivot_longer(2:4, names_to = "rte", values_to = "focal_rte")
+
+best_routes_4 <- best_pair_4 %>%
+  mutate(bcr = 22) %>%
+  select(-max.overlap) %>%
+  rename(overlap = "mean.overlap") %>%
+  pivot_longer(1:4, names_to = "rte", values_to = "focal_rte")
+
+best_routes_5 <- best_pair_5  %>%
+  mutate(bcr = 28) %>%
+  select(-max.overlap) %>%
+  rename(overlap = "mean.overlap") %>%
+  pivot_longer(1:5, names_to = "rte", values_to = "focal_rte")
+
+low_overlap_focal_routes <- bind_rows(focal_routes_1, best_routes_2, best_routes_3, best_routes_4, best_routes_5)
+# write.csv(low_overlap_focal_routes, "data/low_overlap_focal_routes.csv", row.names = F)
+
+## Run models for just focal routes 
+
+scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+
+low_overlap_model_variables <- scale_model_variables_unnest %>%
+  filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
+  group_by(scale) %>%
+  nest()
+
+LO_scale_model_output <- data.frame(scale = c(), part1 = c(), part2 = c(), joined = c(), unexpl = c())
+for(i in 1:25) {
+  model_input <- low_overlap_model_variables$data[[i]]
+  
+  mod1 <- lm(dir_core ~ trend_tmax + trend_tmin, data = model_input)
+  mod2 <- lm(dir_core ~ max_lc, data = model_input)
+  mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = model_input)
+  
+  mod1.r2 <- summary(mod1)$r.squared
+  mod2.r2 <- summary(mod2)$r.squared
+  mod12.r2 <- summary(mod12)$r.squared
+  
+  part1 <- mod12.r2 - mod2.r2 # climate alone
+  part2 <- mod12.r2 - mod1.r2 # land cover alone
+  joined <- mod1.r2 - part1 # shared variance
+  unexpl <- 1 - mod12.r2 # unexplained variance
+  
+  LO_scale_model_output <- rbind(LO_scale_model_output, 
+                              data.frame(scale = i, part1 = part1, part2 = part2,
+                                         joined = joined, unexpl = unexpl))
+}
+# write.csv(LO_scale_model_output, "data/low_overlap_scale_model_output_deviance.csv", row.names = F)
+
+LO_scale_model_plot <- LO_scale_model_output %>%
+  pivot_longer(part1:unexpl, names_to = "deviance")
+
+ggplot(filter(LO_scale_model_plot, deviance == "part1" | deviance == "part2"), aes(x = scale, y = value, fill = deviance)) +
+  geom_col(position = "stack") +
+  scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
+  labs(x = "Aggregated routes", y = "Variance")
+ggsave("figures/low_overlap_scale_model_variance.pdf")
+

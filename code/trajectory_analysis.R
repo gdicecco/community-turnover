@@ -16,6 +16,11 @@ library(ecospat)
 
 theme_set(theme_classic(base_size = 15))
 
+## North America map
+
+na <- world %>%
+  filter(continent == "North America")
+
 ## Read in data
 
 # BBS sampled every 5 years from 1970 to 2016
@@ -26,6 +31,10 @@ bbs_subset <- read.csv("data/bbs_counts_subset_1990-2016.csv", stringsAsFactors 
 
 routes <- read.csv("/Volumes/hurlbertlab/databases/BBS/2017/bbs_routes_20170712.csv", stringsAsFactors = F) %>%
   mutate(stateroute = statenum*1000 + route)
+
+# BBS half-route directionality
+
+half_route_dir <- read.csv("data/half_route_directionality.csv", stringsAsFactors = F)
 
 # Land cover and climate data - 1/2 route scale
 
@@ -220,11 +229,7 @@ ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.factor(bcr), gro
   labs(x = "Scale (routes)", y = "Avg percent of aggregates stateroute occurs in", col = "BCR")
 ggsave("figures/percent_overlap_aggregates.pdf")
 
-## Model for 1/2 routes
-
-#### Need half BBS data at stop level!!
-
-## Model from 1 route up to nearest 25 routes
+## Log abund from 1 route up to nearest 25 routes
 ## One data point per 4 year time window
 ## ID core and transient species
 
@@ -314,7 +319,7 @@ log_abund_core <- bbs_subset %>%
 
 #### Scale model ####
 
-## At each scale (1 route, up to nearest 25 routes within BCR) 
+## At each scale (0.5 route, 1 route, up to nearest 25 routes within BCR) 
 ## Get max land cover delta from raw land cover data and get trend in Tmin and trend in Tmax
 ## Calculate directionality for each grouping of routes: average log(abundance) across routes when pooled
 ## Fit models across BBS routes for each scale (1:25)
@@ -388,8 +393,6 @@ scale_model_variables <- scale_model_input %>%
   group_by(scale) %>%
   nest()
 
-# Here need to join 1/2 route data
-
 scale_model_variables_unnest <- scale_model_variables %>%
   unnest(cols = c(data))
 # write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)
@@ -425,16 +428,90 @@ for(i in 1:25) {
         data.frame(scale = i, part1 = part1, part2 = part2,
                    joined = joined, unexpl = unexpl))
 }
-# write.csv(scale_model_output, "data/scale_model_output_deviance.csv", row.names = F)
+
+# 1/2 route model
+
+half_climate_trends <- bbs_half_climate %>%
+  left_join(routes) %>%
+  mutate(y1 = case_when(countrynum == 124 ~ 1990,
+                        countrynum == 840 ~ 1992),
+         y2 = case_when(countrynum == 124 ~ 2010,
+                        countrynum == 840 ~ 2016),
+         max_bins = case_when(countrynum == 124 ~ 5,
+                              countrynum == 840 ~ 6)) %>%
+  filter(year >= y1, year <= y2) %>%
+  group_by(stateroute, stops) %>%
+  nest() %>%
+  mutate(trends = map(data, ~{
+    df <- .
+    climate_trend <- possibly_climate_trend(df)
+    data.frame(trend_tmax = climate_trend$trend_tmax, trend_tmin = climate_trend$trend_tmin)
+  })) %>%
+  dplyr::select(-data) %>%
+  unnest(trends)
+
+half_route_mod_input <- half_route_dir %>%
+  mutate_at("stops", ~case_when(. == "stops1_25" ~ "1-25",
+                                . == "stops26_50" ~ "26-50")) %>%
+  left_join(half_climate_trends) %>%
+  left_join(bbs_half_landcover) %>%
+  left_join(routes) %>%
+  filter(stateroute %in% bbs_subset$stateroute, bcr %in% bcr_subset$bcr) %>%
+  rename(max_lc = "deltaCover")
+# write.csv(half_route_mod_input, "data/half_route_scale_model_input.csv", row.names = F)
+
+mod1 <- lm(dir_core ~ trend_tmax + trend_tmin, data = half_route_mod_input)
+mod2 <- lm(dir_core ~ max_lc, data = half_route_mod_input)
+mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = half_route_mod_input)
+
+mod1.r2 <- summary(mod1)$r.squared
+mod2.r2 <- summary(mod2)$r.squared
+mod12.r2 <- summary(mod12)$r.squared
+
+part1 <- mod12.r2 - mod2.r2 # climate alone
+part2 <- mod12.r2 - mod1.r2 # land cover alone
+joined <- mod1.r2 - part1 # shared variance
+unexpl <- 1 - mod12.r2 # unexplained variance
+
+half_route_output <- data.frame(scale = 0.5, part1 = part1, part2 = part2,
+                                       joined = joined, unexpl = unexpl)  
+
+scale_model_output_all <- bind_rows(scale_model_output, half_route_output)
+# write.csv(scale_model_output, "data/scale_model_output_variance.csv", row.names = F)
+scale_model_output <- read.csv("data/scale_model_output_variance.csv")
+
+  
+# Scale model figures 
 
 scale_model_plot <- scale_model_output %>%
-  pivot_longer(part1:unexpl, names_to = "deviance")
+  pivot_longer(part1:unexpl, names_to = "variance")
 
-ggplot(filter(scale_model_plot, deviance == "part1" | deviance == "part2"), aes(x = scale, y = value, fill = deviance)) +
+ggplot(filter(scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack") +
   scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/scale_model_variance.pdf")
+
+# Map of directionality values
+
+us_canada <- na %>%
+  filter(name_long == "United States" | name_long == "Canada")
+
+dir_sf <- scale_model_variables_unnest %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  filter(statenum != 3) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+one_route <- tm_shape(us_canada) + tm_polygons() + tm_shape(filter(dir_sf, scale == 1)) + 
+  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3) +
+  tm_layout(legend.text.size = 1, legend.title.size = 2, legend.position = c("left", "bottom"), main.title = "Route-level")
+
+tf_route <- tm_shape(us_canada) + tm_polygons() + tm_shape(filter(dir_sf, scale == 25)) + 
+  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3) +
+  tm_layout(legend.text.size = 1, legend.title.size = 2, legend.position = c("left", "bottom"), main.title = "25 Routes")
+
+dir_map <- tmap_arrange(one_route, tf_route, ncol = 2)
+tmap_save(dir_map, "figures/directionality_map.pdf", units = "in", height = 8, width = 16)
 
 #### Scale model with low/no overlap ####
 
@@ -712,9 +789,12 @@ best_routes_5 <- best_pair_5  %>%
 low_overlap_focal_routes <- bind_rows(focal_routes_1, best_routes_2, best_routes_3, best_routes_4, best_routes_5)
 # write.csv(low_overlap_focal_routes, "data/low_overlap_focal_routes.csv", row.names = F)
 
+low_overlap_focal_routes <- read.csv("data/low_overlap_focal_routes.csv")
+
 ## Run models for just focal routes 
 
 scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+half_route_mod_input <- read.csv("data/half_route_scale_model_input.csv", stringsAsFactors = F)
 
 low_overlap_model_variables <- scale_model_variables_unnest %>%
   filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
@@ -743,12 +823,33 @@ for(i in 1:25) {
                                          joined = joined, unexpl = unexpl))
 }
 # write.csv(LO_scale_model_output, "data/low_overlap_scale_model_output_deviance.csv", row.names = F)
+LO_scale_model_output <- read.csv("data/low_overlap_scale_model_output_deviance.csv", stringsAsFactors = F)
+
+half_route_variables <- half_route_mod_input %>%
+  filter(stateroute %in% low_overlap_focal_routes$focal_rte)
+
+mod1 <- lm(dir_core ~ trend_tmax + trend_tmin, data = half_route_mod_input)
+mod2 <- lm(dir_core ~ max_lc, data = half_route_mod_input)
+mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = half_route_mod_input)
+
+mod1.r2 <- summary(mod1)$r.squared
+mod2.r2 <- summary(mod2)$r.squared
+mod12.r2 <- summary(mod12)$r.squared
+
+part1 <- mod12.r2 - mod2.r2 # climate alone
+part2 <- mod12.r2 - mod1.r2 # land cover alone
+joined <- mod1.r2 - part1 # shared variance
+unexpl <- 1 - mod12.r2 # unexplained variance
+
+half_route_output <- data.frame(scale = 0.5, part1 = part1, part2 = part2,
+                                joined = joined, unexpl = unexpl) 
 
 LO_scale_model_plot <- LO_scale_model_output %>%
-  pivot_longer(part1:unexpl, names_to = "deviance")
+  bind_rows(half_route_output) %>%
+  pivot_longer(part1:unexpl, names_to = "variance")
 
-ggplot(filter(LO_scale_model_plot, deviance == "part1" | deviance == "part2"), aes(x = scale, y = value, fill = deviance)) +
-  geom_col(position = "stack") +
+ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
+  geom_col(position = "stack", width = 0.9) +
   scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/low_overlap_scale_model_variance.pdf")

@@ -5,6 +5,8 @@ library(purrr)
 library(spdep)
 library(tmap)
 library(sf)
+library(vegclust)
+library(ecospat)
 
 ### Read in data #####
 
@@ -48,6 +50,154 @@ counts.subs <- counts %>%
   filter(rpid == 101) %>%
   filter(aou %in% species_list$aou) %>%
   right_join(RT1.routes, by = c("countrynum", "statenum", "stateroute", "year"))
+
+# BBS 50 stop data for 1/2 route estimates
+# Data through 2018
+wd <- paste0(bioark, "/HurlbertLab/Databases/BBS/FiftyStopDataThru2018/")
+
+files <- list.files(path = wd)
+data_files <- files[grepl("fifty[-0-9]", files)]
+
+fifty_stop <- data.frame(filename = data_files) %>%
+  group_by(filename) %>%
+  nest() %>%
+  mutate(data = map(filename, ~read.csv(paste0(wd, .)))) %>%
+  unnest(data) %>%
+  ungroup()
+
+fifty_stop$stops1_25 <- rowSums(select(fifty_stop, Stop1:Stop25))
+fifty_stop$stops26_50 <- rowSums(select(fifty_stop, Stop26:Stop50))
+
+half_route_counts <- fifty_stop %>%
+  select(RouteDataID, CountryNum, StateNum, Route, RPID, Year, AOU, stops1_25, stops26_50) %>%
+  mutate(stateroute = StateNum*1000 + Route) %>%
+  filter(RPID == 101, AOU %in% species_list$aou) %>%
+  filter(Year >= 1990) %>%
+  inner_join(RT1.routes, by = c("CountryNum" = "countrynum", "StateNum" = "statenum", "stateroute", "Year" = "year")) %>%
+  pivot_longer(stops1_25:stops26_50, names_to = "stops", values_to = "count")
+
+# All species
+log_abund_wider <- half_route_counts %>%
+  mutate(y1 = case_when(CountryNum == 124 ~ 1990,
+                        CountryNum == 840 ~ 1992),
+         y2 = case_when(CountryNum == 124 ~ 2010,
+                        CountryNum == 840 ~ 2016),
+         max_bins = case_when(CountryNum == 124 ~ 5,
+                              CountryNum == 840 ~ 6)) %>%
+  filter(Year >= y1, Year <= y2) %>%
+  group_by(CountryNum) %>%
+  nest() %>%
+  mutate(year_bins = map2(CountryNum, data, ~{
+    country <- .x
+    df <- .y
+    
+    if(country == 124) {
+      df %>%
+        mutate(year_bin = case_when(Year >= 1990 & Year <= 1993 ~ 1990,
+                                    Year >= 1994 & Year <= 1997 ~ 1994,
+                                    Year >= 1998 & Year <= 2001 ~ 1998,
+                                    Year >= 2002 & Year <= 2005 ~ 2002,
+                                    TRUE ~ 2006))
+    } else {
+      df %>%
+        mutate(year_bin = case_when(Year >= 1992 & Year <= 1995 ~ 1992,
+                                    Year >= 1996 & Year <= 1999 ~ 1996,
+                                    Year >= 2000 & Year <= 2003 ~ 2000,
+                                    Year >= 2004 & Year <= 2007 ~ 2004,
+                                    Year >= 2008 & Year <= 2011 ~ 2008,
+                                    Year >= 2012 & Year <= 2016 ~ 2012))
+    }
+  })) %>%
+  select(-data) %>%
+  unnest(cols = c(year_bins)) %>%
+  group_by(stateroute, stops, AOU, year_bin) %>%
+  summarize(mean_abund = mean(count) + 1,
+            log_abund = log10(mean_abund)) %>%
+  dplyr::select(stateroute, stops, AOU, year_bin, log_abund) %>%
+  pivot_wider(names_from = AOU, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0))
+
+# Excluding transient species
+log_abund_core <- half_route_counts %>%
+  mutate(y1 = case_when(CountryNum == 124 ~ 1990,
+                        CountryNum == 840 ~ 1992),
+         y2 = case_when(CountryNum == 124 ~ 2010,
+                        CountryNum == 840 ~ 2016),
+         max_bins = case_when(CountryNum == 124 ~ 5,
+                              CountryNum == 840 ~ 6)) %>%
+  filter(Year >= y1, Year <= y2) %>%
+  group_by(CountryNum) %>%
+  nest() %>%
+  mutate(year_bins = map2(CountryNum, data, ~{
+    country <- .x
+    df <- .y
+    
+    if(country == 124) {
+      df %>%
+        mutate(year_bin = case_when(Year >= 1990 & Year <= 1993 ~ 1990,
+                                    Year >= 1994 & Year <= 1997 ~ 1994,
+                                    Year >= 1998 & Year <= 2001 ~ 1998,
+                                    Year >= 2002 & Year <= 2005 ~ 2002,
+                                    TRUE ~ 2006))
+    } else {
+      df %>%
+        mutate(year_bin = case_when(Year >= 1992 & Year <= 1995 ~ 1992,
+                                    Year >= 1996 & Year <= 1999 ~ 1996,
+                                    Year >= 2000 & Year <= 2003 ~ 2000,
+                                    Year >= 2004 & Year <= 2007 ~ 2004,
+                                    Year >= 2008 & Year <= 2011 ~ 2008,
+                                    Year >= 2012 & Year <= 2016 ~ 2012))
+    }
+  })) %>%
+  select(-data) %>%
+  unnest(cols = c(year_bins)) %>%
+  group_by(stateroute, stops, AOU, year_bin) %>%
+  summarize(n_years = n_distinct(Year),
+            mean_abund = mean(count) + 1,
+            log_abund = log10(mean_abund)) %>%
+  filter(n_years > 1) %>%
+  dplyr::select(stateroute, stops, AOU, year_bin, log_abund) %>%
+  pivot_wider(names_from = AOU, values_from = log_abund, values_fn = list(log_abund = mean), values_fill = list(log_abund = 0))
+
+half_route_dir <- half_route_counts %>%
+  ungroup() %>%
+  distinct(stateroute, stops) %>%
+  mutate(scale = 0.5,
+         dir_vals = map2(stateroute, stops, ~{
+          strte <- .x
+          stps <- .y
+        
+           log_abund <- log_abund_wider %>%
+             filter(stateroute == strte, stops == stps) %>%
+             ungroup() %>%
+             select(-stateroute, -stops) %>%
+             group_by(year_bin) %>%
+             summarize_all(mean, na.rm = T)
+             
+           if(nrow(log_abund) > 3) {
+             abund_dist <- dist(log_abund[, -1])
+             dir_all <- trajectoryDirectionality(abund_dist, sites = rep(1, nrow(log_abund)), surveys = log_abund$year_bin)
+           } else {data.frame(dir_all = NA, dir_core = NA)}
+             
+             log_core <- log_abund_core %>%
+               filter(stateroute == strte, stops == stps) %>%
+               ungroup() %>%
+               select(-stateroute, -stops) %>%
+               group_by(year_bin) %>%
+               summarize_all(mean, na.rm = T)
+             
+             if(nrow(log_core) > 3) {
+             abund_dist_core <- dist(log_core[, -1])
+             dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+             
+             data.frame(dir_all = dir_all, dir_core = dir_core)
+             } else {data.frame(dir_all = NA, dir_core = NA)}
+
+         }))
+
+half_route_dir_write <- half_route_dir %>%
+  unnest(dir_vals) %>%
+  filter(!is.na(dir_all))
+write.csv(half_route_dir_write, "data/half_route_directionality.csv", row.names = F)
 
 ### sample sizes for route time series
 

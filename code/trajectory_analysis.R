@@ -854,3 +854,16 @@ ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), a
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/low_overlap_scale_model_variance.pdf")
 
+#### Explaining high directionality ####
+
+# Directionality values at 25 route scales
+# Abundance trend distributions for those communities, Jaccard measures
+
+
+
+# Compare habitat, trophic guilds
+
+
+# Degree and type of env change w/ directionality vals
+
+

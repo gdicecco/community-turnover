@@ -486,7 +486,7 @@ min_max_dir <- dir_core_spp %>%
                           TRUE ~ "middle")) %>%
   filter(pctl != "middle")
 
-abund_trends <- read.csv("/Users/gracedicecco/Desktop/git/poptrends_envchange/model/BBS_abundance_trends.csv", stringsAsFactors = F)
+abund_trends <- read.csv("data/BBS_abundance_trends.csv", stringsAsFactors = F)
 
 min_max_dir_abund <- min_max_dir %>%
   left_join(abund_trends) %>%

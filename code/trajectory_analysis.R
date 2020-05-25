@@ -18,10 +18,19 @@ theme_set(theme_classic(base_size = 15))
 
 ## North America map
 
-na <- world %>%
-  filter(continent == "North America")
+na <- read_sf("data/ne_50m_admin_1_states_provinces_lakes.shp") %>%
+  filter(sr_adm0_a3 == "USA" | sr_adm0_a3 == "CAN") %>%
+  st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
 
 ## Read in data
+
+# Append correct BioArk path
+info <- sessionInfo()
+bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
+
+# Species list 
+
+species_list <- read.csv("data/species_list.csv", stringsAsFactors = F)
 
 # BBS sampled every 5 years from 1970 to 2016
 log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors = F)
@@ -29,7 +38,7 @@ log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors
 # BBS sampled 3/4 years every 4 year time window
 bbs_subset <- read.csv("data/bbs_counts_subset_1990-2016.csv", stringsAsFactors = F)
 
-routes <- read.csv("/Volumes/hurlbertlab/databases/BBS/2017/bbs_routes_20170712.csv", stringsAsFactors = F) %>%
+routes <- read.csv(paste0(bioark, "/hurlbertlab/databases/BBS/2017/bbs_routes_20170712.csv"), stringsAsFactors = F) %>%
   mutate(stateroute = statenum*1000 + route)
 
 # BBS half-route directionality
@@ -856,14 +865,133 @@ ggsave("figures/low_overlap_scale_model_variance.pdf")
 
 #### Explaining high directionality ####
 
+bbs_route_distances %>%
+  filter(focal_rte == .x) %>%
+  arrange(distance) %>%
+  slice(1:.y)
+
 # Directionality values at 25 route scales
-# Abundance trend distributions for those communities, Jaccard measures
+# Regional high leverage species
 
+scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+abund_trends <- read.csv("data/BBS_abundance_trends.csv", stringsAsFactors = F)
+low_overlap_focal_routes <- read.csv("data/low_overlap_focal_routes.csv")
 
+regional_rtes <- bbs_route_distances %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(grouped_rtes = purrr::map(data, ~{
+    df <- .
+    
+      df %>%
+      arrange(distance) %>%
+      slice(1:25) %>%
+      dplyr::select(stateroute)
+  })) %>%
+  dplyr::select(-data) %>%
+  unnest(grouped_rtes)
 
-# Compare habitat, trophic guilds
+regional_abund_trends <- scale_model_variables_unnest %>%
+  filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
+  filter(scale == 25) %>%
+  left_join(regional_rtes) %>%
+  left_join(abund_trends) %>%
+  group_by(focal_rte, dir_all, dir_core, aou) %>%
+  summarize(abund_trend = mean(abundTrend, na.rm = T))
 
+spp_cor <- regional_abund_trends %>%
+  group_by(aou) %>%
+  nest() %>%
+  mutate(n_regions = map_dbl(data, ~nrow(.))) %>%
+  filter(n_regions > 15) %>%
+  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
+  select(-data) %>%
+  ungroup() %>%
+  left_join(species_list) %>%
+  filter(!grepl("unid.", english_common_name)) %>%
+  arrange(desc(abs(abund_dir_r))) %>%
+  slice(1:10) %>%
+  select(aou, n_regions, abund_dir_r, english_common_name)
+# write.csv(spp_cor, "data/high_leverage_spp.csv", row.names = F)
 
-# Degree and type of env change w/ directionality vals
+# Compare correlations of directionality with habitat, trophic guild abund trends
 
+bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
+  select(AOU, CommonName, Foraging, Trophic.Group, migclass)
 
+foraging_cor <- regional_abund_trends %>%
+  left_join(bird_traits, by = c("aou" = "AOU")) %>%
+  filter(!is.na(Foraging)) %>%
+  group_by(Foraging) %>%
+  nest() %>%
+  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
+  select(-data)
+
+trophic_cor <- regional_abund_trends %>%
+  left_join(bird_traits, by = c("aou" = "AOU")) %>%
+  filter(!is.na(Trophic.Group)) %>%
+  group_by(Trophic.Group) %>%
+  nest() %>%
+  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
+  select(-data)
+  
+mig_cor <- regional_abund_trends %>%
+  left_join(bird_traits, by = c("aou" = "AOU")) %>%
+  filter(!is.na(migclass)) %>%
+  group_by(migclass) %>%
+  nest() %>%
+  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
+  select(-data)
+
+foraging_plot <- ggplot(foraging_cor, aes(x = Foraging, y = abund_dir_r)) +
+  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
+  labs(x = "Foraging guild", y = " ") +
+  geom_point(cex = 2) + coord_flip() 
+
+trophic_plot <- ggplot(trophic_cor, aes(x = Trophic.Group, y = abund_dir_r)) +
+  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
+  labs(x = "Trophic Group", y = " ") +
+  geom_point(cex = 2) + coord_flip() 
+
+mig_plot <- ggplot(mig_cor, aes(x = migclass, y = abund_dir_r)) +
+  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
+  labs(x = "Migration distance", y = "Correlation with directionality") +
+  geom_point(cex = 2) + coord_flip() 
+
+plot_grid(foraging_plot, trophic_plot, mig_plot, ncol = 1)
+ggsave("figures/guild_cor_directionality.pdf", units = "in", height = 8, width = 6)
+
+#### Route env change maps ####
+
+## Climate trends at 25 route scale
+
+climate_25route <- scale_model_variables_unnest %>%
+  filter(scale == 25) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  select(focal_rte, longitude, latitude, trend_tmax, trend_tmin) %>%
+  filter(!is.na(trend_tmax), !is.na(trend_tmin)) %>%
+  pivot_longer(trend_tmax:trend_tmin, names_to = "climate", values_to = "trend") %>%
+  st_as_sf(coords = c("longitude", "latitude")) %>%
+  st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
+
+climate_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(climate_25route) + 
+  tm_dots(col = "trend", palette = "-RdBu", size = 0.5, title = "Trend (deg/year)") + 
+  tm_layout(legend.text.size = 1, legend.title.size =2) +
+  tm_facets(by = "climate")
+tmap_save(climate_map, "figures/regional_climate_trends_map.pdf", units = "in", height = 10, width = 8)
+
+## Land cover values at 1 route scale
+
+lc_1route <- scale_model_variables_unnest %>%
+  filter(scale == 1) %>%
+  filter(!is.na(max_lc_class)) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude")) %>%
+  st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
+
+lc_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(lc_1route) + 
+  tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
+  tm_layout(legend.text.size = 1, legend.title.size =2)
+tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)

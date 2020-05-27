@@ -865,11 +865,6 @@ ggsave("figures/low_overlap_scale_model_variance.pdf")
 
 #### Explaining high directionality ####
 
-bbs_route_distances %>%
-  filter(focal_rte == .x) %>%
-  arrange(distance) %>%
-  slice(1:.y)
-
 # Directionality values at 25 route scales
 # Regional high leverage species
 
@@ -919,12 +914,17 @@ spp_cor <- regional_abund_trends %>%
 bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
   select(AOU, CommonName, Foraging, Trophic.Group, migclass)
 
+habitat_guilds <- read.csv("data/droege_sauer_1990_habitat_guilds.csv", stringsAsFactors = F)
+
 foraging_cor <- regional_abund_trends %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
   filter(!is.na(Foraging)) %>%
   group_by(Foraging) %>%
   nest() %>%
-  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
+  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
+         abund_dir_r = map_dbl(cor_test, ~.$estimate),
+         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
+         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
   select(-data)
 
 trophic_cor <- regional_abund_trends %>%
@@ -932,34 +932,64 @@ trophic_cor <- regional_abund_trends %>%
   filter(!is.na(Trophic.Group)) %>%
   group_by(Trophic.Group) %>%
   nest() %>%
-  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
-  select(-data)
-  
+  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
+         abund_dir_r = map_dbl(cor_test, ~.$estimate),
+         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
+         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
+  select(-data)  
+
 mig_cor <- regional_abund_trends %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
   filter(!is.na(migclass)) %>%
   group_by(migclass) %>%
   nest() %>%
-  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
+  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
+         abund_dir_r = map_dbl(cor_test, ~.$estimate),
+         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
+         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
+  select(-data)
+
+habitat_cor <- regional_abund_trends %>%
+  left_join(habitat_guilds) %>%
+  filter(!is.na(nesting_group)) %>%
+  group_by(nesting_group) %>%
+  nest() %>%
+  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
+         abund_dir_r = map_dbl(cor_test, ~.$estimate),
+         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
+         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
   select(-data)
 
 foraging_plot <- ggplot(foraging_cor, aes(x = Foraging, y = abund_dir_r)) +
   geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
   labs(x = "Foraging guild", y = " ") +
-  geom_point(cex = 2) + coord_flip() 
+  geom_point(cex = 2) + 
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) +
+  coord_flip() 
 
 trophic_plot <- ggplot(trophic_cor, aes(x = Trophic.Group, y = abund_dir_r)) +
   geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
   labs(x = "Trophic Group", y = " ") +
-  geom_point(cex = 2) + coord_flip() 
+  geom_point(cex = 2) + 
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) + 
+  coord_flip() 
 
 mig_plot <- ggplot(mig_cor, aes(x = migclass, y = abund_dir_r)) +
   geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
-  labs(x = "Migration distance", y = "Correlation with directionality") +
-  geom_point(cex = 2) + coord_flip() 
+  labs(x = "Migration distance", y = "") +
+  geom_point(cex = 2) + 
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) +
+  coord_flip() 
 
-plot_grid(foraging_plot, trophic_plot, mig_plot, ncol = 1)
-ggsave("figures/guild_cor_directionality.pdf", units = "in", height = 8, width = 6)
+hab_plot <- ggplot(habitat_cor, aes(x = nesting_group, y = abund_dir_r)) +
+  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
+  labs(x = "Nesting habitat", y = "Correlation with directionality") +
+  geom_point(cex = 2) + 
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) +
+  coord_flip() 
+
+plot_grid(foraging_plot, trophic_plot, mig_plot, hab_plot, ncol = 1)
+ggsave("figures/guild_cor_directionality.pdf", units = "in", height = 10, width = 6)
 
 #### Route env change maps ####
 

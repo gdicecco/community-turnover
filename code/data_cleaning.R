@@ -45,6 +45,13 @@ species_list <- species %>%
          sporder != "Cathartiformes")
 # write.csv(species_list, "data/species_list.csv", row.names = F)
 
+# four letter species codes 
+
+fourletter_codes <- read.csv("data/four_letter_codes_birdspp.csv", stringsAsFactors = F) %>%
+  left_join(species_list, by = c("COMMONNAME" = "english_common_name")) %>%
+  filter(!is.na(aou))
+# write.csv(fourletter_codes, "data/four_letter_codes_aous.csv", row.names = F)
+
 # Filter BBS to rpid = 101, runtype = 1, land birds != birds of prey
 counts.subs <- counts %>%
   filter(rpid == 101) %>%

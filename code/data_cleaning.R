@@ -52,6 +52,20 @@ fourletter_codes <- read.csv("data/four_letter_codes_birdspp.csv", stringsAsFact
   filter(!is.na(aou))
 # write.csv(fourletter_codes, "data/four_letter_codes_aous.csv", row.names = F)
 
+# nesting guilds - match old data with new taxonomy
+
+habitat_guilds <- read.csv("data/droege_sauer_1990_habitat_guilds.csv", stringsAsFactors = F)
+
+bird_taxonomy <- read.csv('data/Bird_Taxonomy_20140825.csv', stringsAsFactors = F)
+
+update_habitat_guilds <- habitat_guilds %>%
+  left_join(bird_taxonomy, by = c("aou" = "AOU_IN")) %>%
+  select(nesting_group, AOU_OUT) %>%
+  rename(aou = "AOU_OUT") %>%
+  distinct()
+
+# write.csv(update_habitat_guilds, "data/habitat_guilds_new_aous.csv", row.names = F)
+
 # Filter BBS to rpid = 101, runtype = 1, land birds != birds of prey
 counts.subs <- counts %>%
   filter(rpid == 101) %>%

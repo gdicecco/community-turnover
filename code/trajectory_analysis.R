@@ -916,7 +916,7 @@ spp_cor <- regional_abund_trends %>%
 bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
   select(AOU, CommonName, Foraging, Trophic.Group, migclass)
 
-habitat_guilds <- read.csv("data/droege_sauer_1990_habitat_guilds.csv", stringsAsFactors = F)
+habitat_guilds <- read.csv("data/habitat_guilds_new_aous.csv", stringsAsFactors = F)
 
 foraging_cor <- regional_abund_trends %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
@@ -1089,9 +1089,7 @@ regional_dir_core <- scale_model_variables_unnest %>%
   filter(scale == 25) %>%
   select(focal_rte, dir_core)
 
-spp_dir_diffs <- spp_dir_deltas %>%
-  select(-data,-spp_list, -n_spp) %>%
-  unnest(spp_dir) %>%
+spp_dir_diffs <- spp_dir_unnest %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(dir_diff > 0) %>%
@@ -1115,11 +1113,49 @@ spp_dir_diffs_map <- spp_dir_diffs %>%
   mutate(SPEC_10 = case_when(aou %in% top_ten$aou ~ SPEC,
                              TRUE ~ "Other")) %>%
   left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  mutate(sign = case_when(SPEC %in% c("CLSW", "EUCD") ~ "POS",
+                          SPEC == "HOFI" & longitude < -75 ~ "POS",
+                          SPEC == "TRES" & latitude < 41 ~ "POS",
+                          TRUE ~ "NEG")) %>%
   st_as_sf(coords = c("longitude", "latitude"))
 
+spp_signs <- spp_dir_diffs_map %>%
+  ungroup() %>%
+  dplyr::select(sign) %>%
+  filter(sign == "POS")
+
 hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(spp_dir_diffs_map) + tm_dots(col = "SPEC_10", size = 0.5, title = "SPEC")
+  tm_shape(spp_dir_diffs_map) + tm_bubbles(col = "SPEC_10", size = "dir_diff", title.col = "SPEC", title.size = "Change in dir.") +
+  tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
+  tm_layout(legend.position=c("right", "bottom"))
 tmap_save(hi_lev_spp, "figures/spec-LOO-dir_map.pdf")
+
+# To what degree is one species dominant in driving directionality - how many species w/in 15% of max dir_diff value
+
+dominant_spp <- spp_dir_unnest %>%
+  left_join(regional_dir_core) %>%
+  mutate(dir_diff = dir_core - excl_dir) %>%
+  filter(dir_diff > 0) %>%
+  group_by(focal_rte) %>%
+  filter(dir_diff >= max(dir_diff, na.rm = T)-0.15*max(dir_diff, na.rm = T)) %>%
+  left_join(fourletter_codes) %>%
+  filter(!is.na(SPEC))
+
+dominant_spp_list <- dominant_spp %>%
+  group_by(aou) %>% 
+  summarize(n_regions = n()) %>%
+  arrange(desc(n_regions)) %>%
+  left_join(fourletter_codes) %>%
+  filter(!is.na(SPEC))
+# write.csv(dominant_spp_list, "data/spec-LOO-hi-directionality-ties.csv", row.names = F)
+
+n_regions_tied <- dominant_spp %>%
+  group_by(focal_rte) %>%
+  summarize(n_spp = n_distinct(aou))
+
+nrow(filter(n_regions_tied, n_spp > 1))/nrow(n_regions_tied)
+
+max(n_regions_tied$n_spp)
 
 # Leave-one-out directionality for species guilds
 
@@ -1140,7 +1176,7 @@ guild_excl_dirs <- regional_rtes %>%
   n_spp = map_dbl(spp_list, ~nrow(.))) %>%
   filter(n_spp > 0) %>%
   mutate(forage_dir = map2(data, spp_list, ~{
-    routes <- .x
+    r <- .x
     spp <- .y
     
     foraging <- unique(spp$Foraging)
@@ -1174,7 +1210,7 @@ guild_excl_dirs <- regional_rtes %>%
     
   }),
   trophic_dir = map2(data, spp_list, ~{
-    routes <- .x
+    r <- .x
     spp <- .y
     
     trophic <- unique(spp$Trophic.Group)
@@ -1208,7 +1244,7 @@ guild_excl_dirs <- regional_rtes %>%
     
   }),
   mig_dir = map2(data, spp_list, ~{
-    routes <- .x
+    r <- .x
     spp <- .y
     
     migclass <- unique(spp$migclass)
@@ -1242,7 +1278,7 @@ guild_excl_dirs <- regional_rtes %>%
     
   }),
   nesting_dir = map2(data, spp_list, ~{
-    routes <- .x
+    r <- .x
     spp <- .y
     
     nesting <- unique(spp$nesting_group)
@@ -1305,7 +1341,7 @@ hab_dir_diffs <- guild_excl_dirs %>%
   filter(!is.na(nesting_group)) 
 
 foraging_plot <- ggplot(forage_dir_diffs, aes(x = Foraging, y = dir_diff, fill = Foraging)) +
-  geom_violin(draw_quantiles = c(0.5)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Foraging guild", y = " ") +
   scale_fill_viridis_d() +
@@ -1313,7 +1349,7 @@ foraging_plot <- ggplot(forage_dir_diffs, aes(x = Foraging, y = dir_diff, fill =
   coord_flip() 
 
 trophic_plot <- ggplot(trophic_dir_diffs, aes(x = Trophic.Group, y = dir_diff, fill = Trophic.Group)) +
-  geom_violin(draw_quantiles = c(0.5)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Trophic Group", y = " ") +
   scale_fill_viridis_d() +
@@ -1321,7 +1357,7 @@ trophic_plot <- ggplot(trophic_dir_diffs, aes(x = Trophic.Group, y = dir_diff, f
   coord_flip() 
 
 mig_plot <- ggplot(mig_dir_diffs, aes(x = migclass, y = dir_diff, fill = migclass)) +
-  geom_violin(draw_quantiles = c(0.5)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Migration distance", y = " ") +
   scale_fill_viridis_d() +
@@ -1329,7 +1365,7 @@ mig_plot <- ggplot(mig_dir_diffs, aes(x = migclass, y = dir_diff, fill = migclas
   coord_flip() 
 
 hab_plot <- ggplot(hab_dir_diffs, aes(x = nesting_group, y = dir_diff, fill = nesting_group)) +
-  geom_violin(draw_quantiles = c(0.5)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Nesting habitat", y = " ") +
   scale_fill_viridis_d() +

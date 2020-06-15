@@ -10,6 +10,7 @@ library(sf)
 library(vegclust)
 library(ecospat)
 library(cowplot)
+library(broom)
 
 #### Set up ####
 
@@ -503,6 +504,45 @@ ggplot(filter(scale_model_plot, variance == "part1" | variance == "part2"), aes(
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/scale_model_variance.pdf")
 
+# Scale model predictor effects
+
+scale_model_variables <-  read.csv("data/scale_model_input.csv", stringsAsFactors = F) %>%
+  group_by(scale) %>%
+  nest()
+
+scale_model_output <- data.frame(scale = c(), part1 = c(), part2 = c(), joined = c(), unexpl = c())
+for(i in 1:25) {
+  model_input <- scale_model_variables$data[[i]]
+  
+  mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = model_input)
+  
+  tidy_mod <- tidy(mod12) %>%
+    mutate(scale = i,
+           conf_lo = confint(mod12)[, 1],
+           conf_hi = confint(mod12)[, 2])
+  
+  scale_model_output <- rbind(scale_model_output, 
+                              tidy_mod)
+}
+
+LC <- ggplot(filter(scale_model_output, term == "max_lc"), aes(x = scale, y = estimate)) + 
+  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
+  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
+  labs(x = "Scale", y = "Effect of change in max land cover")
+
+tmax <- ggplot(filter(scale_model_output, term == "trend_tmax"), aes(x = scale, y = estimate)) + 
+  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
+  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
+  labs(x = "Scale", y = "Effect of trend in Tmax")
+
+tmin <- ggplot(filter(scale_model_output, term == "trend_tmin"), aes(x = scale, y = estimate)) + 
+  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
+  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
+  labs(x = "Scale", y = "Effect of trend in Tmin")
+
+plot_grid(tmax, tmin, LC, nrow = 2)
+ggsave("figures/scale_model_effect_ests.pdf", units = "in", height = 9, width = 12)
+  
 # Map of directionality values
 
 us_canada <- na %>%
@@ -864,6 +904,47 @@ ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), a
   scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/low_overlap_scale_model_variance.pdf")
+
+# Scale model lo overlap predictor effects
+
+low_overlap_model_variables <- scale_model_variables_unnest %>%
+  filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
+  group_by(scale) %>%
+  nest()
+
+scale_model_output <- data.frame(scale = c(), part1 = c(), part2 = c(), joined = c(), unexpl = c())
+for(i in 1:25) {
+  model_input <- low_overlap_model_variables$data[[i]]
+  
+  mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = model_input)
+  
+  tidy_mod <- tidy(mod12) %>%
+    mutate(scale = i,
+           conf_lo = confint(mod12)[, 1],
+           conf_hi = confint(mod12)[, 2])
+  
+  scale_model_output <- rbind(scale_model_output, 
+                              tidy_mod)
+}
+
+LC <- ggplot(filter(scale_model_output, term == "max_lc"), aes(x = scale, y = estimate)) + 
+  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
+  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
+  labs(x = "Scale", y = "Effect of change in max land cover")
+
+tmax <- ggplot(filter(scale_model_output, term == "trend_tmax"), aes(x = scale, y = estimate)) + 
+  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
+  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
+  labs(x = "Scale", y = "Effect of trend in Tmax")
+
+tmin <- ggplot(filter(scale_model_output, term == "trend_tmin"), aes(x = scale, y = estimate)) + 
+  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
+  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
+  labs(x = "Scale", y = "Effect of trend in Tmin")
+
+plot_grid(tmax, tmin, LC, nrow = 2)
+ggsave("figures/scale_model_lo_overlap_effect_ests.pdf", units = "in", height = 9, width = 12)
+
 
 #### Explaining high directionality ####
 
@@ -1318,6 +1399,7 @@ forage_dir_diffs <- guild_excl_dirs %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(Foraging)) 
+# write.csv(forage_dir_diffs, "data/guild_LOO_dir_impact_foraging.csv", row.names = F)
 
 trophic_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, trophic_dir) %>%
@@ -1325,6 +1407,7 @@ trophic_dir_diffs <- guild_excl_dirs %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(Trophic.Group)) 
+# write.csv(trophic_dir_diffs, "data/guild_LOO_dir_impact_trophic.csv", row.names = F)
 
 mig_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, mig_dir) %>%
@@ -1332,6 +1415,7 @@ mig_dir_diffs <- guild_excl_dirs %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(migclass)) 
+# write.csv(mig_dir_diffs, "data/guild_LOO_dir_impact_migclass.csv", row.names = F)
 
 hab_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, nesting_dir) %>%
@@ -1339,6 +1423,7 @@ hab_dir_diffs <- guild_excl_dirs %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(nesting_group)) 
+# write.csv(hab_dir_diffs, "data/guild_LOO_dir_impact_habitat.csv", row.names = F)
 
 foraging_plot <- ggplot(forage_dir_diffs, aes(x = Foraging, y = dir_diff, fill = Foraging)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
@@ -1375,6 +1460,26 @@ hab_plot <- ggplot(hab_dir_diffs, aes(x = nesting_group, y = dir_diff, fill = ne
 plot_grid(foraging_plot, trophic_plot, mig_plot, hab_plot, ncol = 1)
 ggsave("figures/guild_LOO_directionality.pdf", units = "in", height = 10, width = 6)
 
+### Maps: max delta guild for each route
+
+max_diff_guild_map <- function(df) {
+  legend_title <- colnames(df)[[2]]
+  max_sf <- df %>%
+    group_by(focal_rte) %>%
+    filter(dir_diff == max(dir_diff)) %>%
+    left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+    st_as_sf(coords = c("longitude", "latitude"))
+  
+  map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+    tm_shape(max_sf) + tm_bubbles(col = legend_title, size = "dir_diff", title.size = "Impact on directionality") +
+    tm_layout(legend.position=c("right", "bottom"))
+  tmap_save(map, paste0("figures/guild_LOO_map_", legend_title, ".pdf"))
+}
+
+max_diff_guild_map(mig_dir_diffs)
+max_diff_guild_map(forage_dir_diffs)
+max_diff_guild_map(hab_dir_diffs)
+max_diff_guild_map(trophic_dir_diffs)
 
 #### Route env change maps ####
 

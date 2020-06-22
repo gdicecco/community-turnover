@@ -409,6 +409,10 @@ scale_model_variables_unnest <- scale_model_variables %>%
   unnest(cols = c(data))
 # write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)
 
+scale_model_variables <- read.csv("data/scale_model_input.csv", stringsAsFactors = F) %>%
+  group_by(scale) %>%
+  nest()
+
 ggplot(scale_model_variables_unnest, aes(x = scale, y = dir_all, col = focal_rte, group = focal_rte)) + 
   geom_line(alpha = 0.1) + labs(x = "Scale (routes)", y = "Directionality (all spp.)", col = "Stateroute")
 ggsave("figures/directionality_scale.pdf")
@@ -542,6 +546,26 @@ tmin <- ggplot(filter(scale_model_output, term == "trend_tmin"), aes(x = scale, 
 
 plot_grid(tmax, tmin, LC, nrow = 2)
 ggsave("figures/scale_model_effect_ests.pdf", units = "in", height = 9, width = 12)
+
+## Scale model partial effects plots
+
+pdf("figures/scale_model_tmax_effects.pdf")
+for(scale in scale_model_variables$scale) {
+  df <- scale_model_variables$data[[scale]]
+  print(ggplot(df, aes(x = trend_tmax, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
+          labs(title = paste0("Routes = ", scale)))
+}
+dev.off()
+
+pdf("figures/scale_model_tmin_effects.pdf")
+for(scale in scale_model_variables$scale) {
+  df <- scale_model_variables$data[[scale]]
+  print(ggplot(df, aes(x = trend_tmin, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
+          labs(title = paste0("Routes = ", scale)))
+}
+dev.off()
+
+
   
 # Map of directionality values
 
@@ -946,6 +970,25 @@ plot_grid(tmax, tmin, LC, nrow = 2)
 ggsave("figures/scale_model_lo_overlap_effect_ests.pdf", units = "in", height = 9, width = 12)
 
 
+## Scale model partial effects plots
+
+pdf("figures/scale_model_lo_overlap_tmax_effects.pdf")
+for(scale in low_overlap_model_variables$scale) {
+  df <- low_overlap_model_variables$data[[scale]]
+  print(ggplot(df, aes(x = trend_tmax, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
+          labs(title = paste0("Routes = ", scale)))
+}
+dev.off()
+
+pdf("figures/scale_model_lo_overlap_tmin_effects.pdf")
+for(scale in low_overlap_model_variables$scale) {
+  df <- low_overlap_model_variables$data[[scale]]
+  print(ggplot(df, aes(x = trend_tmin, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
+          labs(title = paste0("Routes = ", scale)))
+}
+dev.off()
+
+
 #### Explaining high directionality ####
 
 # Directionality values at 25 route scales
@@ -1166,6 +1209,8 @@ spp_dir_unnest <- spp_dir_deltas %>%
   unnest(spp_dir)
 # write.csv(spp_dir_unnest, "data/species-leave-one-out-directionality.csv", row.names = F)
 
+spp_dir_unnest <- read.csv("data/species-leave-one-out-directionality.csv", stringsAsFactors = F)
+
 regional_dir_core <- scale_model_variables_unnest %>%
   filter(scale == 25) %>%
   select(focal_rte, dir_core)
@@ -1186,6 +1231,8 @@ high_impact_spp <- spp_dir_diffs %>%
   left_join(fourletter_codes) %>%
   filter(!is.na(SPEC))
 # write.csv(high_impact_spp, "data/spec-LOO-directionality-hi-impact.csv", row.names = F)
+
+high_impact_spp <- read.csv("data/spec-LOO-directionality-hi-impact.csv", stringsAsFactors = F)
 
 top_ten <- high_impact_spp %>%
   slice(1:10)
@@ -1480,6 +1527,225 @@ max_diff_guild_map(mig_dir_diffs)
 max_diff_guild_map(forage_dir_diffs)
 max_diff_guild_map(hab_dir_diffs)
 max_diff_guild_map(trophic_dir_diffs)
+
+### Can max impact guild be attributed to high leverage species?
+
+# Highest impact species per focal_rte
+spp_dir_diffs
+hi_impact_spp <- unique(spp_dir_diffs$aou)
+
+# Remove high impact species from communities
+guild_core_spp <- core_spp %>%
+  left_join(bird_traits, by = c("aou" = "AOU")) %>%
+  left_join(habitat_guilds) %>%
+  filter(!(aou %in% spp_dir_diffs$aou))
+
+# Calculate guild LOO with high impact species excluded
+guild_excl_dirs <- regional_rtes %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  left_join(spp_dir_diffs) %>%
+  mutate(spp_list = map(data, ~{
+    df <- .
+    guild_core_spp %>%
+      filter(stateroute %in% df$stateroute) %>%
+      ungroup() %>%
+      distinct(aou, Foraging, Trophic.Group, migclass, nesting_group)
+  }),
+  n_spp = map_dbl(spp_list, ~nrow(.))) %>%
+  filter(n_spp > 0) %>%
+  mutate(forage_dir = map2(data, spp_list, ~{
+    r <- .x
+    spp <- .y
+    
+    foraging <- unique(spp$Foraging)
+    
+    res <- data.frame(Foraging = foraging, excl_dir = NA)
+    
+    for(sp in foraging) {
+      spec <- spp %>%
+        filter(Foraging == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(hi_impact_spp)))) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$Foraging == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$Foraging == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }),
+  trophic_dir = map2(data, spp_list, ~{
+    r <- .x
+    spp <- .y
+    
+    trophic <- unique(spp$Trophic.Group)
+    
+    res <- data.frame(Trophic.Group = trophic, excl_dir = NA)
+    
+    for(sp in trophic) {
+      spec <- spp %>%
+        filter(Trophic.Group == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(hi_impact_spp)))) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$Trophic.Group == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$Trophic.Group == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }),
+  mig_dir = map2(data, spp_list, ~{
+    r <- .x
+    spp <- .y
+    
+    migclass <- unique(spp$migclass)
+    
+    res <- data.frame(migclass = migclass, excl_dir = NA)
+    
+    for(sp in migclass) {
+      spec <- spp %>%
+        filter(migclass == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(hi_impact_spp)))) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$migclass == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$migclass == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }),
+  nesting_dir = map2(data, spp_list, ~{
+    r <- .x
+    spp <- .y
+    
+    nesting <- unique(spp$nesting_group)
+    
+    res <- data.frame(nesting_group = nesting, excl_dir = NA)
+    
+    for(sp in nesting) {
+      spec <- spp %>%
+        filter(nesting_group == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(hi_impact_spp)))) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$nesting_group == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$nesting_group == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }))
+
+
+forage_dir_diffs <- guild_excl_dirs %>%
+  rename(spp_excl_dir = "excl_dir") %>%
+  select(focal_rte, spp_excl_dir, forage_dir) %>%
+  unnest(forage_dir) %>%
+  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
+  filter(!is.na(Foraging)) 
+write.csv(forage_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_foraging.csv", row.names = F)
+
+trophic_dir_diffs <- guild_excl_dirs %>%
+  rename(spp_excl_dir = "excl_dir") %>%
+  select(focal_rte, spp_excl_dir, trophic_dir) %>%
+  unnest(trophic_dir) %>%
+  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
+  filter(!is.na(Trophic.Group)) 
+write.csv(trophic_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_trophic.csv", row.names = F)
+
+mig_dir_diffs <- guild_excl_dirs %>%
+  rename(spp_excl_dir = "excl_dir") %>%
+  select(focal_rte, spp_excl_dir, mig_dir) %>%
+  unnest(mig_dir) %>%
+  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
+  filter(!is.na(migclass)) 
+write.csv(mig_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_migclass.csv", row.names = F)
+
+hab_dir_diffs <- guild_excl_dirs %>%
+  rename(spp_excl_dir = "excl_dir") %>%
+  select(focal_rte, spp_excl_dir, nesting_dir) %>%
+  unnest(nesting_dir) %>%
+  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
+  filter(!is.na(nesting_group)) 
+write.csv(hab_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_habitat.csv", row.names = F)
+
+max_diff_guild_map_exclHIspp <- function(df) {
+  legend_title <- colnames(df)[[3]]
+  max_sf <- df %>%
+    group_by(focal_rte) %>%
+    filter(dir_diff == max(dir_diff)) %>%
+    left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+    st_as_sf(coords = c("longitude", "latitude"))
+  
+  map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+    tm_shape(max_sf) + tm_bubbles(col = legend_title, size = "dir_diff", title.size = "Impact on directionality") +
+    tm_layout(legend.position=c("right", "bottom"))
+  tmap_save(map, paste0("figures/guild_LOO_noHIspp_map_", legend_title, ".pdf"))
+}
+
+max_diff_guild_map_exclHIspp(mig_dir_diffs)
+max_diff_guild_map_exclHIspp(forage_dir_diffs)
+max_diff_guild_map_exclHIspp(hab_dir_diffs)
+max_diff_guild_map_exclHIspp(trophic_dir_diffs)
 
 #### Route env change maps ####
 

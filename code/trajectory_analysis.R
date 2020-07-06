@@ -1781,3 +1781,164 @@ lc_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
   tm_layout(legend.text.size = 1, legend.title.size =2)
 tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)
+
+##### Community weighted means ######
+
+# Long format log abund data
+
+# All species
+log_abund_long <- bbs_subset %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  mutate(y1 = case_when(countrynum == 124 ~ 1990,
+                        countrynum == 840 ~ 1992),
+         y2 = case_when(countrynum == 124 ~ 2010,
+                        countrynum == 840 ~ 2016),
+         max_bins = case_when(countrynum == 124 ~ 5,
+                              countrynum == 840 ~ 6)) %>%
+  filter(year >= y1, year <= y2) %>%
+  group_by(countrynum) %>%
+  nest() %>%
+  mutate(year_bins = map2(countrynum, data, ~{
+    country <- .x
+    df <- .y
+    
+    if(country == 124) {
+      df %>%
+        mutate(year_bin = case_when(year >= 1990 & year <= 1993 ~ 1990,
+                                    year >= 1994 & year <= 1997 ~ 1994,
+                                    year >= 1998 & year <= 2001 ~ 1998,
+                                    year >= 2002 & year <= 2005 ~ 2002,
+                                    TRUE ~ 2006))
+    } else {
+      df %>%
+        mutate(year_bin = case_when(year >= 1992 & year <= 1995 ~ 1992,
+                                    year >= 1996 & year <= 1999 ~ 1996,
+                                    year >= 2000 & year <= 2003 ~ 2000,
+                                    year >= 2004 & year <= 2007 ~ 2004,
+                                    year >= 2008 & year <= 2011 ~ 2008,
+                                    year >= 2012 & year <= 2016 ~ 2012))
+    }
+  })) %>%
+  select(-data) %>%
+  unnest(cols = c(year_bins)) %>%
+  group_by(stateroute, aou, year_bin) %>%
+  summarize(mean_abund = mean(speciestotal) + 1,
+            log_abund = log10(mean_abund)) %>%
+  dplyr::select(stateroute, aou, year_bin, log_abund)
+
+# Excluding transient species
+log_abund_core_long <- bbs_subset %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  mutate(y1 = case_when(countrynum == 124 ~ 1990,
+                        countrynum == 840 ~ 1992),
+         y2 = case_when(countrynum == 124 ~ 2010,
+                        countrynum == 840 ~ 2016),
+         max_bins = case_when(countrynum == 124 ~ 5,
+                              countrynum == 840 ~ 6)) %>%
+  filter(year >= y1, year <= y2) %>%
+  group_by(countrynum) %>%
+  nest() %>%
+  mutate(year_bins = map2(countrynum, data, ~{
+    country <- .x
+    df <- .y
+    
+    if(country == 124) {
+      df %>%
+        mutate(year_bin = case_when(year >= 1990 & year <= 1993 ~ 1990,
+                                    year >= 1994 & year <= 1997 ~ 1994,
+                                    year >= 1998 & year <= 2001 ~ 1998,
+                                    year >= 2002 & year <= 2005 ~ 2002,
+                                    TRUE ~ 2006))
+    } else {
+      df %>%
+        mutate(year_bin = case_when(year >= 1992 & year <= 1995 ~ 1992,
+                                    year >= 1996 & year <= 1999 ~ 1996,
+                                    year >= 2000 & year <= 2003 ~ 2000,
+                                    year >= 2004 & year <= 2007 ~ 2004,
+                                    year >= 2008 & year <= 2011 ~ 2008,
+                                    year >= 2012 & year <= 2016 ~ 2012))
+    }
+  })) %>%
+  select(-data) %>%
+  unnest(cols = c(year_bins)) %>%
+  group_by(stateroute, aou, year_bin) %>%
+  summarize(n_years = n_distinct(year),
+            mean_abund = mean(speciestotal) + 1,
+            log_abund = log10(mean_abund)) %>%
+  filter(n_years > 1) %>%
+  dplyr::select(stateroute, aou, year_bin, log_abund)
+
+# Temperature trait data
+bbs_aou_temp_range <- read.csv("data/bbs_aou_temp_range.csv", stringsAsFactors = F)
+
+# Climate trends
+env_vars <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+
+# Calculate CWMs for temp niche breadth from 1-25 routes
+na_climate <- filter(bbs_climate_avgs, is.na(mean_tmax) | is.na(mean_tmin))
+
+climate_trend <- function(climate_df) {
+  trend_tmax <- coef(lm(mean_tmax ~ year, data = climate_df))[[2]]
+  trend_tmin <- coef(lm(mean_tmin ~ year, data = climate_df))[[2]]
+  
+  return(list(trend_tmax = trend_tmax, trend_tmin = trend_tmin))
+}
+possibly_climate_trend <- possibly(climate_trend, list(trend_tmax = NA, trend_tmin = NA))
+
+# why does this stall out
+cwm_input <- bbs_subset %>%
+  ungroup() %>%
+  distinct(stateroute, bcr) %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  dplyr::select(stateroute) %>%
+  mutate(scale = map(stateroute, ~data.frame(scale = rep(1:25)))) %>%
+  unnest(cols = c(scale)) %>%
+  mutate(model_input = map2(stateroute, scale, ~{
+    bbs_route_distances %>%
+      filter(focal_rte == .x) %>%
+      arrange(distance) %>%
+      slice(1:.y)
+  }),
+  input_vars = map(model_input, ~{
+    df <- .
+    
+    climate <- bbs_climate_avgs %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year) %>%
+      summarize(mean_tmax = mean(mean_tmax, na.rm = T),
+                mean_tmin = mean(mean_tmin, na.rm = T))
+    
+    climate_trend <- possibly_climate_trend(climate)
+    
+    log_abund <- log_abund_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin) %>%
+      summarize_all(mean, na.rm = T) %>%
+      left_join(bbs_aou_temp_range) %>%
+      mutate(wtd_range = log_abund*temp_range)
+    
+    cwm_all <- mean(log_abund$wtd_range, na.rm = T)
+    
+    log_abund_core <- log_abund_core_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin) %>%
+      summarize_all(mean, na.rm = T) %>%
+      left_join(bbs_aou_temp_range) %>%
+      mutate(wtd_range = log_abund*temp_range)
+    
+    cwm_core <- mean(log_abund_core$wtd_range, na.rm = T)
+    
+    data.frame(focal_rte = unique(df$focal_rte),
+               trend_tmax = climate_trend$trend_tmax, trend_tmin = climate_trend$trend_tmin,
+               cwm_all = cwm_all, cwm_core = cwm_core)
+  }))
+
+# scale_model_variables <- scale_model_input %>%
+#   dplyr::select(scale, input_vars) %>%
+#   unnest(cols = c(input_vars)) %>%
+#   group_by(scale) %>%
+#   nest()
+# 
+# scale_model_variables_unnest <- scale_model_variables %>%
+#   unnest(cols = c(data))
+# write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)

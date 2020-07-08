@@ -1885,13 +1885,12 @@ climate_trend <- function(climate_df) {
 }
 possibly_climate_trend <- possibly(climate_trend, list(trend_tmax = NA, trend_tmin = NA))
 
-# why does this stall out
 cwm_input <- bbs_subset %>%
   ungroup() %>%
   distinct(stateroute, bcr) %>%
   filter(bcr %in% bcr_subset$bcr) %>%
   dplyr::select(stateroute) %>%
-  mutate(scale = map(stateroute, ~data.frame(scale = rep(1:25)))) %>%
+  mutate(scale = map(stateroute, ~data.frame(scale = rep(1:25)))) %>% # rep(1:25) for all scales
   unnest(cols = c(scale)) %>%
   mutate(model_input = map2(stateroute, scale, ~{
     bbs_route_distances %>%
@@ -1912,8 +1911,8 @@ cwm_input <- bbs_subset %>%
     
     log_abund <- log_abund_long %>%
       filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin) %>%
-      summarize_all(mean, na.rm = T) %>%
+      group_by(year_bin, aou) %>%
+      summarize(log_abund = mean(log_abund, na.rm = T)) %>%
       left_join(bbs_aou_temp_range) %>%
       mutate(wtd_range = log_abund*temp_range)
     
@@ -1921,8 +1920,8 @@ cwm_input <- bbs_subset %>%
     
     log_abund_core <- log_abund_core_long %>%
       filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin) %>%
-      summarize_all(mean, na.rm = T) %>%
+      group_by(year_bin, aou) %>%
+      summarize(log_abund = mean(log_abund, na.rm = T)) %>%
       left_join(bbs_aou_temp_range) %>%
       mutate(wtd_range = log_abund*temp_range)
     
@@ -1933,12 +1932,42 @@ cwm_input <- bbs_subset %>%
                cwm_all = cwm_all, cwm_core = cwm_core)
   }))
 
-# scale_model_variables <- scale_model_input %>%
-#   dplyr::select(scale, input_vars) %>%
-#   unnest(cols = c(input_vars)) %>%
-#   group_by(scale) %>%
-#   nest()
-# 
-# scale_model_variables_unnest <- scale_model_variables %>%
-#   unnest(cols = c(data))
-# write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)
+cwm_unnest <- cwm_input %>%
+  dplyr::select(-model_input) %>%
+  unnest(cols = c(input_vars))
+# write.csv(cwm_unnest, "data/cwm_temp_range_all_scales.csv", row.names = F)
+
+cwm_model <- cwm_unnest %>%
+  group_by(scale) %>%
+  nest() %>%
+  mutate(core_model = purrr::map(data, ~{
+    df <- .
+    lm(cwm_core ~ trend_tmin + trend_tmax, data = df)
+  }),
+  all_model = purrr::map(data, ~{
+    df <- .
+    lm(cwm_all ~ trend_tmin + trend_tmax, data = df)
+  }),
+  core_broom = purrr::map(core_model, ~tidy(.)),
+  all_broom = purrr::map(all_model, ~tidy(.)))
+
+cwm_core_effects <- cwm_model %>%
+  dplyr::select(scale, core_broom) %>%
+  unnest()
+
+ggplot(filter(cwm_core_effects, term != "(Intercept)"), aes(x = scale, y = estimate)) + geom_point() + 
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) + 
+  geom_hline(yintercept = 0, lty = 2) + facet_wrap(~term)
+ggsave("figures/cwm_temp_niche_effects.pdf")
+
+cwm_all_effects <- cwm_model %>%
+  dplyr::select(scale, all_broom) %>%
+  unnest()
+
+ggplot(filter(cwm_all_effects, term != "(Intercept)"), aes(x = scale, y = estimate)) + geom_point() + 
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) + 
+  geom_hline(yintercept = 0, lty = 2) + facet_wrap(~term)
+ggsave("figures/cwm_temp_niche_effects_allspp.pdf")
+
+
+

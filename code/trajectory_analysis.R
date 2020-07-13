@@ -60,9 +60,9 @@ bbs_climate <- read.csv("data/bbs_routes_climate_trends.csv", stringsAsFactors =
 
 ## Raw land cover and climate data for calculating multiple scales
 
-landcover_us <- read.csv("/Volumes/hurlbertlab/dicecco/data/fragmentation_indices_nlcd_simplified.csv", stringsAsFactors = F) %>%
+landcover_us <- read.csv(paste0(bioark, "/hurlbertlab/dicecco/data/fragmentation_indices_nlcd_simplified.csv"), stringsAsFactors = F) %>%
   mutate(country = "US")
-landcover_ca <- read.csv("/Volumes/hurlbertlab/dicecco/data/fragmentation_indices_canada.csv", stringsAsFactors = F) %>%
+landcover_ca <- read.csv(paste0(bioark, "/hurlbertlab/dicecco/data/fragmentation_indices_canada.csv"), stringsAsFactors = F) %>%
   mutate(country = "Canada")
 
 landcover_na <- bind_rows(landcover_us, landcover_ca) %>%
@@ -191,7 +191,7 @@ bbs_distances_km <- bbs_route_distances %>%
   mutate(dist_km = distance/1000)
 
 mean_bbs_distances <- stateroutes %>%
-  mutate(scale = map(stateroute, ~data.frame(scale = rep(1:25)))) %>%
+  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(1:25)))) %>%
   unnest(cols = c(scale)) %>%
   mutate(model_input = map2(stateroute, scale, ~{
     bbs_distances_km %>%
@@ -278,7 +278,7 @@ log_abund_wider <- bbs_subset %>%
                                     year >= 2012 & year <= 2016 ~ 2012))
     }
   })) %>%
-  select(-data) %>%
+  dplyr::select(-data) %>%
   unnest(cols = c(year_bins)) %>%
   group_by(stateroute, aou, year_bin) %>%
   summarize(mean_abund = mean(speciestotal) + 1,
@@ -319,7 +319,7 @@ log_abund_core <- bbs_subset %>%
                                     year >= 2012 & year <= 2016 ~ 2012))
     }
   })) %>%
-  select(-data) %>%
+  dplyr::select(-data) %>%
   unnest(cols = c(year_bins)) %>%
   group_by(stateroute, aou, year_bin) %>%
   summarize(n_years = n_distinct(year),
@@ -1819,7 +1819,7 @@ log_abund_long <- bbs_subset %>%
                                     year >= 2012 & year <= 2016 ~ 2012))
     }
   })) %>%
-  select(-data) %>%
+  dplyr::select(-data) %>%
   unnest(cols = c(year_bins)) %>%
   group_by(stateroute, aou, year_bin) %>%
   summarize(mean_abund = mean(speciestotal) + 1,
@@ -1859,7 +1859,7 @@ log_abund_core_long <- bbs_subset %>%
                                     year >= 2012 & year <= 2016 ~ 2012))
     }
   })) %>%
-  select(-data) %>%
+  dplyr::select(-data) %>%
   unnest(cols = c(year_bins)) %>%
   group_by(stateroute, aou, year_bin) %>%
   summarize(n_years = n_distinct(year),
@@ -1868,30 +1868,27 @@ log_abund_core_long <- bbs_subset %>%
   filter(n_years > 1) %>%
   dplyr::select(stateroute, aou, year_bin, log_abund)
 
-# Temperature trait data
+# Trait data
 bbs_aou_temp_range <- read.csv("data/bbs_aou_temp_range.csv", stringsAsFactors = F)
+forest_range <- read.csv("data/spp_forest_traits.csv", stringsAsFactors = F)
+body_size <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
+  dplyr::select(AOU, Mass.g., logMass)
+
+cwm_traits <- bbs_aou_temp_range %>%
+  left_join(forest_range) %>%
+  left_join(body_size, by = c("aou" = "AOU")) %>%
+  na.omit()
 
 # Climate trends
 env_vars <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
 
-# Calculate CWMs for temp niche breadth from 1-25 routes
-na_climate <- filter(bbs_climate_avgs, is.na(mean_tmax) | is.na(mean_tmin))
-
-climate_trend <- function(climate_df) {
-  trend_tmax <- coef(lm(mean_tmax ~ year, data = climate_df))[[2]]
-  trend_tmin <- coef(lm(mean_tmin ~ year, data = climate_df))[[2]]
-  
-  return(list(trend_tmax = trend_tmax, trend_tmin = trend_tmin))
-}
-possibly_climate_trend <- possibly(climate_trend, list(trend_tmax = NA, trend_tmin = NA))
-
-# why does this stall out
+# Takes a long time ~40 minutes
 cwm_input <- bbs_subset %>%
   ungroup() %>%
   distinct(stateroute, bcr) %>%
   filter(bcr %in% bcr_subset$bcr) %>%
   dplyr::select(stateroute) %>%
-  mutate(scale = map(stateroute, ~data.frame(scale = rep(1:25)))) %>%
+  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,3,21))))) %>%
   unnest(cols = c(scale)) %>%
   mutate(model_input = map2(stateroute, scale, ~{
     bbs_route_distances %>%
@@ -1899,46 +1896,119 @@ cwm_input <- bbs_subset %>%
       arrange(distance) %>%
       slice(1:.y)
   }),
-  input_vars = map(model_input, ~{
+  input_vars = purrr::map(model_input, ~{
     df <- .
     
-    climate <- bbs_climate_avgs %>%
+    cwm_all <- log_abund_long %>%
       filter(stateroute %in% df$stateroute) %>%
-      group_by(year) %>%
-      summarize(mean_tmax = mean(mean_tmax, na.rm = T),
-                mean_tmin = mean(mean_tmin, na.rm = T))
-    
-    climate_trend <- possibly_climate_trend(climate)
-    
-    log_abund <- log_abund_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin) %>%
+      group_by(year_bin, aou) %>%
       summarize_all(mean, na.rm = T) %>%
-      left_join(bbs_aou_temp_range) %>%
-      mutate(wtd_range = log_abund*temp_range)
-    
-    cwm_all <- mean(log_abund$wtd_range, na.rm = T)
-    
-    log_abund_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
+      left_join(cwm_traits) %>%
+      mutate(wtd_temp_range = log_abund*temp_range,
+             wtd_temp_mean = log_abund*temp_mean,
+             wtd_for_range = log_abund*for_range,
+             wtd_for_mean = log_abund*propFor,
+             wtd_logmass = log_abund*logMass) %>%
       group_by(year_bin) %>%
+      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
+                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
+                cwm_for_range = mean(wtd_for_range, na.rm = T),
+                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
+                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+      mutate(spp = "all",
+             focal_rte = unique(df$focal_rte))
+    
+    cwm_core <- log_abund_core_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin, aou) %>%
       summarize_all(mean, na.rm = T) %>%
-      left_join(bbs_aou_temp_range) %>%
-      mutate(wtd_range = log_abund*temp_range)
+      left_join(cwm_traits) %>%
+      mutate(wtd_temp_range = log_abund*temp_range,
+             wtd_temp_mean = log_abund*temp_mean,
+             wtd_for_range = log_abund*for_range,
+             wtd_for_mean = log_abund*propFor,
+             wtd_logmass = log_abund*logMass) %>%
+      group_by(year_bin) %>%
+      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
+                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
+                cwm_for_range = mean(wtd_for_range, na.rm = T),
+                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
+                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+      mutate(spp = "no transients",
+             focal_rte = unique(df$focal_rte))
     
-    cwm_core <- mean(log_abund_core$wtd_range, na.rm = T)
+    rbind(cwm_all, cwm_core)
     
-    data.frame(focal_rte = unique(df$focal_rte),
-               trend_tmax = climate_trend$trend_tmax, trend_tmin = climate_trend$trend_tmin,
-               cwm_all = cwm_all, cwm_core = cwm_core)
   }))
 
-# scale_model_variables <- scale_model_input %>%
-#   dplyr::select(scale, input_vars) %>%
-#   unnest(cols = c(input_vars)) %>%
-#   group_by(scale) %>%
-#   nest()
-# 
-# scale_model_variables_unnest <- scale_model_variables %>%
-#   unnest(cols = c(data))
-# write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)
+cwm_unnest <- cwm_input %>%
+  dplyr::select(-model_input) %>%
+  unnest(cols = c(input_vars))
+
+write.csv(cwm_unnest, "data/cwm_traits_all_scales.csv", row.names = F)
+
+cwm_temp_plots <- cwm_unnest %>%
+  filter(scale == 21, spp == "no transients") %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
+  }),
+  body_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_logmass ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+temp_plots <- ggplot(filter(cwm_temp_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate, fill = model)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
+  theme(legend.position = "none") +
+  labs(x = "", y = "Change over time", title = "Regional") +
+  scale_fill_manual(values = c("springgreen3", "skyblue3")) +
+  scale_x_discrete(labels = c("mean_mod" = "Temperature mean", "range_mod" = "Temperature range")) +
+  geom_hline(yintercept = 0, lty = 2, cex = 1)
+
+
+body_plot <- ggplot(filter(cwm_temp_plots, model %in% c("body_mod")), aes(x = model, y = estimate, fill = model)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
+  theme(legend.position = "none") +
+  labs(x = "", y = "Change over time", title = "Regional") +
+  scale_fill_manual(values = c("springgreen3")) +
+  scale_x_discrete(labels = c("body_mod" = "Log(body size (g))")) +
+  geom_hline(yintercept = 0, lty = 2, cex = 1)
+
+cwm_hab_plots <- cwm_unnest %>%
+  filter(scale == 2, spp == "no transients") %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_mean ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+for_plots <- ggplot(filter(cwm_hab_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate, fill = model)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
+  theme(legend.position = "none") +
+  labs(x = "", y = "Change over time", title = "Local") +
+  scale_fill_manual(values = c("springgreen3", "skyblue3")) +
+  scale_x_discrete(labels = c("mean_mod" = "% Forest mean", "range_mod" = "% Forest range")) +
+  geom_hline(yintercept = 0, lty = 2, cex = 1)
+
+plot_grid(temp_plots, body_plot, for_plots, ncol = 2)
+ggsave("figures/cwms_breadth_position.pdf", units = "in", height = 10, width = 10)

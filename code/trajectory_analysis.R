@@ -1882,68 +1882,7 @@ cwm_traits <- bbs_aou_temp_range %>%
 # Climate trends
 env_vars <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
 
-# Takes a long time ~40 minutes
-cwm_input <- bbs_subset %>%
-  ungroup() %>%
-  distinct(stateroute, bcr) %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  dplyr::select(stateroute) %>%
-  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,3,21))))) %>%
-  unnest(cols = c(scale)) %>%
-  mutate(model_input = map2(stateroute, scale, ~{
-    bbs_route_distances %>%
-      filter(focal_rte == .x) %>%
-      arrange(distance) %>%
-      slice(1:.y)
-  }),
-  input_vars = purrr::map(model_input, ~{
-    df <- .
-    
-    cwm_all <- log_abund_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      mutate(wtd_temp_range = log_abund*temp_range,
-             wtd_temp_mean = log_abund*temp_mean,
-             wtd_for_range = log_abund*for_range,
-             wtd_for_mean = log_abund*propFor,
-             wtd_logmass = log_abund*logMass) %>%
-      group_by(year_bin) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
-      mutate(spp = "all",
-             focal_rte = unique(df$focal_rte))
-    
-    cwm_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      mutate(wtd_temp_range = log_abund*temp_range,
-             wtd_temp_mean = log_abund*temp_mean,
-             wtd_for_range = log_abund*for_range,
-             wtd_for_mean = log_abund*propFor,
-             wtd_logmass = log_abund*logMass) %>%
-      group_by(year_bin) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
-      mutate(spp = "no transients",
-             focal_rte = unique(df$focal_rte))
-    
-    rbind(cwm_all, cwm_core)
-    
-  }))
 
-cwm_unnest <- cwm_input %>%
-  dplyr::select(-model_input) %>%
-  unnest(cols = c(input_vars))
 
 write.csv(cwm_unnest, "data/cwm_traits_all_scales.csv", row.names = F)
 
@@ -2012,3 +1951,41 @@ for_plots <- ggplot(filter(cwm_hab_plots, model %in% c("mean_mod", "range_mod"))
 
 plot_grid(temp_plots, body_plot, for_plots, ncol = 2)
 ggsave("figures/cwms_breadth_position.pdf", units = "in", height = 10, width = 10)
+=======
+# write.csv(cwm_unnest, "data/cwm_temp_range_all_scales.csv", row.names = F)
+
+cwm_model <- cwm_unnest %>%
+  group_by(scale) %>%
+  nest() %>%
+  mutate(core_model = purrr::map(data, ~{
+    df <- .
+    lm(cwm_core ~ trend_tmin + trend_tmax, data = df)
+  }),
+  all_model = purrr::map(data, ~{
+    df <- .
+    lm(cwm_all ~ trend_tmin + trend_tmax, data = df)
+  }),
+  core_broom = purrr::map(core_model, ~tidy(.)),
+  all_broom = purrr::map(all_model, ~tidy(.)))
+
+cwm_core_effects <- cwm_model %>%
+  dplyr::select(scale, core_broom) %>%
+  unnest()
+
+ggplot(filter(cwm_core_effects, term != "(Intercept)"), aes(x = scale, y = estimate)) + geom_point() + 
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) + 
+  geom_hline(yintercept = 0, lty = 2) + facet_wrap(~term)
+ggsave("figures/cwm_temp_niche_effects.pdf")
+
+cwm_all_effects <- cwm_model %>%
+  dplyr::select(scale, all_broom) %>%
+  unnest()
+
+ggplot(filter(cwm_all_effects, term != "(Intercept)"), aes(x = scale, y = estimate)) + geom_point() + 
+  geom_errorbar(aes(ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) + 
+  geom_hline(yintercept = 0, lty = 2) + facet_wrap(~term)
+ggsave("figures/cwm_temp_niche_effects_allspp.pdf")
+
+
+
+>>>>>>> e8e54a400a56bd9d1626ebdcbbb48f220085bc93

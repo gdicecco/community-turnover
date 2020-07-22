@@ -11,6 +11,7 @@ library(vegclust)
 library(ecospat)
 library(cowplot)
 library(broom)
+library(grid)
 
 #### Set up ####
 
@@ -213,9 +214,9 @@ mean_bcr_distances <- mean_bbs_distances %>%
 bcr_subset <- bcr_sample_size %>%
   filter(n_routes > 25)
 
-ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr), 
+mean_dist_plot <- ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr), 
        aes(x = scale, y = mean_dist_bcr, col = bcr, group = bcr)) + 
-  geom_line() +
+  geom_line(cex = 1) +
   scale_color_viridis_c() +
   labs(x = "Scale (routes)", y = "Mean distance between routes (km)", col = "BCR")
 # ggsave("figures/scale_aggregated_routes.pdf")
@@ -236,10 +237,54 @@ mean_pct_overlap <- pct_overlap %>%
   group_by(bcr, scale) %>%
   summarize(mean_reps = mean(pct_reps))
 
-ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.factor(bcr), group = as.factor(bcr))) + 
-  geom_line() +
-  labs(x = "Scale (routes)", y = "Avg percent of aggregates stateroute occurs in", col = "BCR")
+pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = bcr, group = bcr)) + 
+  geom_line(cex = 1) +
+  scale_color_viridis_c() +
+  labs(x = "Scale (routes)", y = "Avg percent of aggregates route occurs in", col = "BCR")
 # ggsave("figures/percent_overlap_aggregates.pdf")
+
+## Aggregation methods fig
+
+bcr <- read_sf("\\\\BioArk//HurlbertLab//DiCecco//bcr_terrestrial_shape//BCR_Terrestrial_master.shp") %>%
+  filter(BCR %in% bcr_subset$bcr) %>%
+  mutate_at(c("BCR"), ~as.factor(.))
+
+study_routes <- bbs_subset %>%
+  ungroup() %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  distinct(stateroute, latitude, longitude) %>%
+  st_as_sf(coords = c("longitude", "latitude")) %>%
+  st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
+
+bcr_map <- tm_shape(na) + tm_polygons(col = "gray50") +
+  tm_shape(bcr) + tm_polygons(col = "BCR") +
+  tm_shape(study_routes) + tm_dots(col = "black", size = 0.05) + 
+  tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0))
+
+bcr_palette <- tmaptools::get_brewer_pal("Set3", n = 15)
+names(bcr_palette) <- as.factor(unique(bcr$BCR))
+
+mean_dist_plot <- ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr), 
+                         aes(x = scale, y = mean_dist_bcr, col = as.factor(bcr), group = as.factor(bcr))) + 
+  geom_line(cex = 1) +
+  scale_color_manual(values = bcr_palette) +
+  labs(x = "Scale (routes)", y = "Mean distance between routes (km)", col = "BCR") +
+  theme(legend.position = "none")
+
+pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.factor(bcr), group = as.factor(bcr))) + 
+  geom_line(cex = 1) +
+  scale_color_manual(values = bcr_palette) +
+  labs(x = "Scale (routes)", y = "Avg percent of aggregates route occurs in", col = "BCR") +
+  theme(legend.position = "none")
+
+line_panels <- plot_grid(mean_dist_plot, pct_plot, ncol = 2)
+
+grid.newpage()
+pdf(paste0(getwd(),"/figures/bcr_aggregation_multipanel.pdf"), height = 12, width = 12)
+pushViewport(viewport(layout = grid.layout(nrow = 2, ncol = 1)))
+print(bcr_map, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(line_panels, vp = viewport(layout.pos.row = 2, layout.pos.col = 1))
+dev.off()
 
 ## Log abund from 1 route up to nearest 25 routes
 ## One data point per 4 year time window
@@ -409,6 +454,8 @@ scale_model_variables_unnest <- scale_model_variables %>%
   unnest(cols = c(data))
 # write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)
 
+scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+
 scale_model_variables <- read.csv("data/scale_model_input.csv", stringsAsFactors = F) %>%
   group_by(scale) %>%
   nest()
@@ -502,8 +549,8 @@ scale_model_output <- read.csv("data/scale_model_output_variance.csv")
 scale_model_plot <- scale_model_output %>%
   pivot_longer(part1:unexpl, names_to = "variance")
 
-ggplot(filter(scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
-  geom_col(position = "stack") +
+all_routes <- ggplot(filter(scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
+  geom_col(position = "stack", col = "white") +
   scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/scale_model_variance.pdf")
@@ -920,14 +967,21 @@ half_route_output <- data.frame(scale = 0.5, part1 = part1, part2 = part2,
                                 joined = joined, unexpl = unexpl) 
 
 LO_scale_model_plot <- LO_scale_model_output %>%
-  bind_rows(half_route_output) %>%
+#  bind_rows(half_route_output) %>%
   pivot_longer(part1:unexpl, names_to = "variance")
 
-ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
-  geom_col(position = "stack", width = 0.9) +
+lo_overlap <- ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
+  geom_col(position = "stack", width = 0.9, col = "white") +
   scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/low_overlap_scale_model_variance.pdf")
+
+## Variance partitioning multipanel figure
+legend <- get_legend(all_routes)
+
+plot_grid(all_routes + theme(legend.position = "none"), lo_overlap + theme(legend.position = "none"), legend,
+          ncol = 3, rel_widths = c(0.4, 0.4, 0.2), labels = c("A", "B", ""))
+ggsave("figures/variance_partitioning_multipanel.pdf", units = "in", height = 5, width = 12)
 
 # Scale model lo overlap predictor effects
 
@@ -1747,7 +1801,7 @@ max_diff_guild_map_exclHIspp(forage_dir_diffs)
 max_diff_guild_map_exclHIspp(hab_dir_diffs)
 max_diff_guild_map_exclHIspp(trophic_dir_diffs)
 
-#### Route env change maps ####
+#### Route env change figures ####
 
 ## Climate trends at 25 route scale
 
@@ -1776,11 +1830,30 @@ lc_1route <- scale_model_variables_unnest %>%
   st_as_sf(coords = c("longitude", "latitude")) %>%
   st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
 
+lc_posneg <- scale_model_variables_unnest %>%
+  filter(scale == 1) %>%
+  filter(!is.na(max_lc_class)) %>%
+  mutate(sign = case_when(max_lc > 0 ~ "Increase",
+                          TRUE ~ "Decrease"))
+
+theme_set(theme_classic(base_size = 17))
+class_change <- ggplot(lc_posneg, aes(x = max_lc_class, fill = sign)) + geom_bar() + labs(x = "", y = "BBS Routes", fill = "") + 
+  scale_fill_manual(values = c("Increase" = "firebrick3", "Decrease" = "dodgerblue3")) + theme(legend.position = c(0.9, 0.9)) +
+  coord_flip()
+
 lc_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
-  tm_layout(legend.text.size = 1, legend.title.size =2)
+  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)
+
+grid.newpage()
+pdf(paste0(getwd(), "/figures/max_landcover_multipanel.pdf"), height = 6, width = 15)
+pushViewport(viewport(layout = grid.layout(nrow = 1, ncol = 2)))
+print(lc_map, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(class_change, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
+dev.off()
+
 
 ##### Community weighted means ######
 

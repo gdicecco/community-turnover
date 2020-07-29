@@ -616,24 +616,75 @@ dev.off()
   
 # Map of directionality values
 
-us_canada <- na %>%
-  filter(name_long == "United States" | name_long == "Canada")
-
 dir_sf <- scale_model_variables_unnest %>%
   left_join(routes, by = c("focal_rte" = "stateroute")) %>%
   filter(statenum != 3) %>%
   st_as_sf(coords = c("longitude", "latitude"))
 
-one_route <- tm_shape(us_canada) + tm_polygons() + tm_shape(filter(dir_sf, scale == 1)) + 
-  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3) +
-  tm_layout(legend.text.size = 1, legend.title.size = 2, legend.position = c("left", "bottom"), main.title = "Route-level")
+one_route <- tm_shape(na) + tm_polygons(col = "gray50") +
+  tm_shape(filter(dir_sf, scale == 1)) + 
+  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_layout(main.title = "Route-level")
+# col breaks: 0.25-0.30, ... 0.5-0.55 by 0.5
+# 6 colors
 
-tf_route <- tm_shape(us_canada) + tm_polygons() + tm_shape(filter(dir_sf, scale == 25)) + 
-  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3) +
-  tm_layout(legend.text.size = 1, legend.title.size = 2, legend.position = c("left", "bottom"), main.title = "25 Routes")
+# histogram legend
+one_route_cols <- RColorBrewer::brewer.pal("YlGnBu", n = 6)
+names(one_route_cols) <- seq(1:6)
+
+one_route_vals <- dir_sf %>%
+  filter(scale == 1) %>%
+  mutate(color = case_when(dir_core > 0.25 & dir_core <= 0.30 ~ 1,
+                           dir_core > 0.30 & dir_core <= 0.35 ~ 2,
+                           dir_core > 0.35 & dir_core <= 0.40 ~ 3,
+                           dir_core > 0.40 & dir_core <= 0.45 ~ 4,
+                           dir_core > 0.45 & dir_core <= 0.50 ~ 5,
+                           dir_core > 0.50 ~ 6))
+
+one_legend <- ggplot(one_route_vals, aes(x = dir_core, fill = as.factor(color))) +
+  geom_histogram(breaks = seq(0.25, 0.55, by = 0.01)) + 
+  scale_fill_manual(values = one_route_cols) +
+  labs(x = "Directionality", y = "Count") + theme(legend.position = "none")
+
+
+tf_route <-  tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(dir_sf, scale == 25)) + 
+  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_layout(main.title = "25 Routes")
+# col breaks: 0.25 to 0.65 by 0.5
+# 8 colors
+
+tf_route_cols <- RColorBrewer::brewer.pal("YlGnBu", n = 8)
+
+names(tf_route_cols) <- seq(1:8)
+
+tf_route_vals <- dir_sf %>%
+  filter(scale == 25) %>%
+  mutate(color = case_when(dir_core > 0.25 & dir_core <= 0.30 ~ 1,
+                           dir_core > 0.30 & dir_core <= 0.35 ~ 2,
+                           dir_core > 0.35 & dir_core <= 0.40 ~ 3,
+                           dir_core > 0.40 & dir_core <= 0.45 ~ 4,
+                           dir_core > 0.45 & dir_core <= 0.50 ~ 5,
+                           dir_core > 0.50 & dir_core <= 0.55 ~ 6,
+                           dir_core > 0.55 & dir_core <= 0.60 ~ 7,
+                           dir_core > 0.6 ~ 8))
+
+tf_legend <- ggplot(tf_route_vals, aes(x = dir_core, fill = as.factor(color))) +
+  geom_histogram(breaks = seq(0.25, 0.65, by = 0.01)) + 
+  scale_fill_manual(values = tf_route_cols) +
+  labs(x = "Directionality", y = "Count") + theme(legend.position = "none")
 
 dir_map <- tmap_arrange(one_route, tf_route, ncol = 2)
-tmap_save(dir_map, "figures/directionality_map.pdf", units = "in", height = 8, width = 16)
+
+vp_one <- viewport(0.1, 0.15, width = 0.175, height = 0.25)
+vp_tf <- viewport(0.6, 0.15, width = 0.175, height = 0.25)
+
+wd <- getwd()
+pdf(paste0(wd, "/figures/directionality_map.pdf"), height = 8, width = 16)
+print(dir_map)
+print(one_legend, vp = vp_one)
+print(tf_legend, vp = vp_tf)
+dev.off()
 
 #### Scale model with low/no overlap ####
 
@@ -1501,6 +1552,7 @@ forage_dir_diffs <- guild_excl_dirs %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(Foraging)) 
 # write.csv(forage_dir_diffs, "data/guild_LOO_dir_impact_foraging.csv", row.names = F)
+forage_dir_diffs <- read.csv("data/guild_LOO_dir_impact_foraging.csv", stringsAsFactors = F)
 
 trophic_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, trophic_dir) %>%
@@ -1509,6 +1561,7 @@ trophic_dir_diffs <- guild_excl_dirs %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(Trophic.Group)) 
 # write.csv(trophic_dir_diffs, "data/guild_LOO_dir_impact_trophic.csv", row.names = F)
+trophic_dir_diffs <- read.csv("data/guild_LOO_dir_impact_trophic.csv", stringsAsFactors = F)
 
 mig_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, mig_dir) %>%
@@ -1517,6 +1570,7 @@ mig_dir_diffs <- guild_excl_dirs %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
   filter(!is.na(migclass)) 
 # write.csv(mig_dir_diffs, "data/guild_LOO_dir_impact_migclass.csv", row.names = F)
+mig_dir_diffs <- read.csv("data/guild_LOO_dir_impact_migclass.csv", stringsAsFactors = F)
 
 hab_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, nesting_dir) %>%
@@ -1838,7 +1892,7 @@ lc_posneg <- scale_model_variables_unnest %>%
 
 theme_set(theme_classic(base_size = 17))
 class_change <- ggplot(lc_posneg, aes(x = max_lc_class, fill = sign)) + geom_bar() + labs(x = "", y = "BBS Routes", fill = "") + 
-  scale_fill_manual(values = c("Increase" = "firebrick3", "Decrease" = "dodgerblue3")) + theme(legend.position = c(0.9, 0.9)) +
+  scale_fill_manual(values = c("Increase" = "#CA0020", "Decrease" ="#67A9CF")) + theme(legend.position = c(0.9, 0.9)) +
   coord_flip()
 
 lc_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
@@ -1847,11 +1901,24 @@ lc_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)
 
+tmin_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(lc_1route) + 
+  tm_dots(col = "trend_tmin", size = 0.5, title = "Trend in Tmin", palette = "-RdBu") + 
+  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+
+tmax_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(lc_1route) + 
+  tm_dots(col = "trend_tmax", size = 0.5, title = "Trend in Tmax", palette = "-RdBu") + 
+  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+
+
 grid.newpage()
-pdf(paste0(getwd(), "/figures/max_landcover_multipanel.pdf"), height = 6, width = 15)
-pushViewport(viewport(layout = grid.layout(nrow = 1, ncol = 2)))
+pdf(paste0(getwd(), "/figures/max_landcover_multipanel.pdf"), height = 12, width = 15)
+pushViewport(viewport(layout = grid.layout(nrow = 2, ncol = 2)))
 print(lc_map, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
 print(class_change, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
+print(tmin_map, vp = viewport(layout.pos.row = 2, layout.pos.col = 1))
+print(tmax_map, vp = viewport(layout.pos.row = 2, layout.pos.col = 2))
 dev.off()
 
 
@@ -2016,7 +2083,8 @@ cwm_unnest <- cwm_input %>%
   dplyr::select(-model_input) %>%
   unnest(cols = c(input_vars))
 
-write.csv(cwm_unnest, "data/cwm_traits_all_scales.csv", row.names = F)
+# write.csv(cwm_unnest, "data/cwm_traits_all_scales.csv", row.names = F)
+cwm_unnest <- read.csv("data/cwm_traits_all_scales.csv", stringsAsFactors = F)
 
 cwm_temp_plots <- cwm_unnest %>%
   filter(scale == 21, spp == "no transients") %>%
@@ -2043,7 +2111,7 @@ temp_plots <- ggplot(filter(cwm_temp_plots, model %in% c("mean_mod", "range_mod"
   geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
   theme(legend.position = "none") +
   labs(x = "", y = "Change over time", title = "Regional") +
-  scale_fill_manual(values = c("springgreen3", "skyblue3")) +
+  scale_fill_viridis_d() +
   scale_x_discrete(labels = c("mean_mod" = "Temperature mean", "range_mod" = "Temperature range")) +
   geom_hline(yintercept = 0, lty = 2, cex = 1)
 
@@ -2052,7 +2120,7 @@ body_plot <- ggplot(filter(cwm_temp_plots, model %in% c("body_mod")), aes(x = mo
   geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
   theme(legend.position = "none") +
   labs(x = "", y = "Change over time", title = "Regional") +
-  scale_fill_manual(values = c("springgreen3")) +
+  scale_fill_viridis_d() +
   scale_x_discrete(labels = c("body_mod" = "Log(body size (g))")) +
   geom_hline(yintercept = 0, lty = 2, cex = 1)
 
@@ -2077,12 +2145,16 @@ for_plots <- ggplot(filter(cwm_hab_plots, model %in% c("mean_mod", "range_mod"))
   geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
   theme(legend.position = "none") +
   labs(x = "", y = "Change over time", title = "Local") +
-  scale_fill_manual(values = c("springgreen3", "skyblue3")) +
+  scale_fill_viridis_d() +
   scale_x_discrete(labels = c("mean_mod" = "% Forest mean", "range_mod" = "% Forest range")) +
   geom_hline(yintercept = 0, lty = 2, cex = 1)
 
 plot_grid(temp_plots, body_plot, for_plots, ncol = 2)
-ggsave("figures/cwms_breadth_position.pdf", units = "in", height = 10, width = 10)
+# ggsave("figures/cwms_breadth_position.pdf", units = "in", height = 10, width = 10)
+
+plot_grid(foraging_plot, trophic_plot, mig_plot, temp_plots, body_plot, for_plots, ncol = 3, nrow = 2,
+          labels = c("A", "B", "C", "D", "E", "F"), label_size = 17)
+ggsave("figures/guild_niche_impacts.pdf", units = "in", height = 10, width = 15)
 
 #### Change in niche specialization over time ####
 ### For each species, what is temp range and mean, forest range and mean of occurrences in each time window

@@ -551,7 +551,7 @@ scale_model_plot <- scale_model_output %>%
 
 all_routes <- ggplot(filter(scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack", col = "white") +
-  scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
+  scale_fill_manual(values = c("#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/scale_model_variance.pdf")
 
@@ -1023,7 +1023,7 @@ LO_scale_model_plot <- LO_scale_model_output %>%
 
 lo_overlap <- ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack", width = 0.9, col = "white") +
-  scale_fill_discrete(name = "Variance explained", labels = c("Climate", "Land cover")) +
+  scale_fill_manual(values = c("#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
 ggsave("figures/low_overlap_scale_model_variance.pdf")
 
@@ -1580,36 +1580,28 @@ hab_dir_diffs <- guild_excl_dirs %>%
   filter(!is.na(nesting_group)) 
 # write.csv(hab_dir_diffs, "data/guild_LOO_dir_impact_habitat.csv", row.names = F)
 
-foraging_plot <- ggplot(forage_dir_diffs, aes(x = Foraging, y = dir_diff, fill = Foraging)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
+foraging_plot <- ggplot(forage_dir_diffs, aes(x = Foraging, y = dir_diff)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Foraging guild", y = " ") +
-  scale_fill_viridis_d() +
-  theme(legend.position = "none") +
+  labs(x = "Foraging guild", y = "Directionality impact") +
   coord_flip() 
 
-trophic_plot <- ggplot(trophic_dir_diffs, aes(x = Trophic.Group, y = dir_diff, fill = Trophic.Group)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
+trophic_plot <- ggplot(trophic_dir_diffs, aes(x = Trophic.Group, y = dir_diff)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Trophic Group", y = " ") +
-  scale_fill_viridis_d() +
-  theme(legend.position = "none") +
+  labs(x = "Trophic Group", y = "Directionality impact") +
   coord_flip() 
 
-mig_plot <- ggplot(mig_dir_diffs, aes(x = migclass, y = dir_diff, fill = migclass)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
+mig_plot <- ggplot(mig_dir_diffs, aes(x = migclass, y = dir_diff)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Migration distance", y = " ") +
-  scale_fill_viridis_d() +
-  theme(legend.position = "none") +
+  labs(x = "Migration distance", y = "Directionality impact") +
   coord_flip() 
 
-hab_plot <- ggplot(hab_dir_diffs, aes(x = nesting_group, y = dir_diff, fill = nesting_group)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width") +
+hab_plot <- ggplot(hab_dir_diffs, aes(x = nesting_group, y = dir_diff)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Nesting habitat", y = " ") +
-  scale_fill_viridis_d() +
-  theme(legend.position = "none") +
+  labs(x = "Nesting habitat", y = "Directionality impact") +
   coord_flip() 
 
 plot_grid(foraging_plot, trophic_plot, mig_plot, hab_plot, ncol = 1)
@@ -1868,6 +1860,7 @@ climate_25route <- scale_model_variables_unnest %>%
   st_as_sf(coords = c("longitude", "latitude")) %>%
   st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
 
+
 climate_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(climate_25route) + 
   tm_dots(col = "trend", palette = "-RdBu", size = 0.5, title = "Trend (deg/year)") + 
@@ -1892,25 +1885,87 @@ lc_posneg <- scale_model_variables_unnest %>%
 
 theme_set(theme_classic(base_size = 17))
 class_change <- ggplot(lc_posneg, aes(x = max_lc_class, fill = sign)) + geom_bar() + labs(x = "", y = "BBS Routes", fill = "") + 
-  scale_fill_manual(values = c("Increase" = "#CA0020", "Decrease" ="#67A9CF")) + theme(legend.position = c(0.9, 0.9)) +
+  scale_fill_manual(values = c("Increase" = "#EF8A62", "Decrease" ="#92C5DE")) + theme(legend.position = c(0.9, 0.9)) +
   coord_flip()
 
 lc_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
   tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
-tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)
+# tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)
+
+color_scale <- data.frame(color = c(1:4), 
+                          temp_hex = c("#92C5DE", "#FDDBC7", "#EF8A62", "#B2182B"), stringsAsFactors = F)
 
 tmin_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
-  tm_dots(col = "trend_tmin", size = 0.5, title = "Trend in Tmin", palette = "-RdBu") + 
-  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+  tm_dots(col = "trend_tmin", size = 0.5, title = "Trend in Tmin", breaks = quantile(lc_1route$trend_tmin, na.rm = T), palette = color_scale$temp_hex) + 
+  tm_layout(legend.show = F, outer.margins = c(0.01,0.01,0.01,0.01))
+  #  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 
 tmax_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
-  tm_dots(col = "trend_tmax", size = 0.5, title = "Trend in Tmax", palette = "-RdBu") + 
-  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+  tm_dots(col = "trend_tmax", size = 0.5, title = "Trend in Tmax", 
+          breaks = quantile(lc_1route$trend_tmax, na.rm = T), palette = color_scale$temp_hex) + 
+  tm_layout(legend.show = F, outer.margins = c(0.01,0.01,0.01,0.01))
+#  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 
+tmin_quant <- quantile(lc_1route$trend_tmin, na.rm = T)
+tmax_quant <- quantile(lc_1route$trend_tmax, na.rm = T)
+
+hist_breaks <- function(quantiles, bins) {
+  breaks <- seq(min(quantiles), max(quantiles), length.out = bins)
+  
+  breaks_total <- c(breaks, quantiles) %>% sort()
+  
+  return(unique(breaks_total))
+}
+
+tmin_breaks <- hist_breaks(tmin_quant, 30)
+tmax_breaks <- hist_breaks(tmax_quant, 30)
+
+quantile_group <- function(quantiles, value) {
+  case_when(
+    value <= quantiles[2] ~ 1,
+    value > quantiles[2] & value <= quantiles[3] ~ 2,
+    value > quantiles[3] & value <= quantiles[4] ~ 3,
+    value > quantiles[4] & value <= quantiles[5] ~ 4)
+}
+
+lc_1route_plots <- lc_1route %>%
+  mutate(tmin_color = quantile_group(tmin_quant, trend_tmin),
+         tmax_color = quantile_group(tmax_quant, trend_tmax))
+
+tmin_hist <- ggplot(lc_1route_plots, aes(x = trend_tmin, fill = as.factor(tmin_color))) + 
+  geom_histogram(breaks = tmin_breaks) +
+  geom_vline(aes(xintercept = 0), lty = 2) +
+  labs(x = "Trend in Tmin", y = "Count") +
+  scale_y_continuous(breaks = c(0, 50, 100)) +
+  scale_fill_manual(values = color_scale$temp_hex) +
+  theme(text = element_text(size = 12), axis.text = element_text(size = 10),
+        axis.title = element_text(size = 13),
+        legend.position = "none") +
+  theme(
+    panel.background = element_rect(fill = "transparent"), # bg of the panel
+    plot.background = element_rect(fill = "transparent", color = NA) # bg of the plot
+  )
+
+tmax_hist <- ggplot(lc_1route_plots, aes(x = trend_tmax, fill = as.factor(tmax_color))) + 
+  geom_histogram(breaks = tmax_breaks) +
+  geom_vline(aes(xintercept = 0), lty = 2) +
+  labs(x = "Trend in Tmax", y = "Count") +
+  scale_y_continuous(breaks = c(0, 50, 100)) +
+  scale_fill_manual(values = color_scale$temp_hex) +
+  theme(text = element_text(size = 12), axis.text = element_text(size = 10),
+        axis.title = element_text(size = 13),
+        legend.position = "none") +
+  theme(
+    panel.background = element_rect(fill = "transparent"), # bg of the panel
+    plot.background = element_rect(fill = "transparent", color = NA) # bg of the plot
+  )
+
+vp_tmin <- viewport(0.42, 0.12, width = 0.16, height = 0.15)
+vp_tmax <- viewport(0.92, 0.12, width = 0.16, height = 0.15)
 
 grid.newpage()
 pdf(paste0(getwd(), "/figures/max_landcover_multipanel.pdf"), height = 12, width = 15)
@@ -1919,6 +1974,8 @@ print(lc_map, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
 print(class_change, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
 print(tmin_map, vp = viewport(layout.pos.row = 2, layout.pos.col = 1))
 print(tmax_map, vp = viewport(layout.pos.row = 2, layout.pos.col = 2))
+print(tmin_hist, vp = vp_tmin)
+print(tmax_hist, vp = vp_tmax)
 dev.off()
 
 
@@ -2107,20 +2164,16 @@ cwm_temp_plots <- cwm_unnest %>%
   unnest(cols = c("table")) %>%
   filter(term == "year_bin")
 
-temp_plots <- ggplot(filter(cwm_temp_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate, fill = model)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
-  theme(legend.position = "none") +
+temp_plots <- ggplot(filter(cwm_temp_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
   labs(x = "", y = "Change over time", title = "Regional") +
-  scale_fill_viridis_d() +
   scale_x_discrete(labels = c("mean_mod" = "Temperature mean", "range_mod" = "Temperature range")) +
   geom_hline(yintercept = 0, lty = 2, cex = 1)
 
 
-body_plot <- ggplot(filter(cwm_temp_plots, model %in% c("body_mod")), aes(x = model, y = estimate, fill = model)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
-  theme(legend.position = "none") +
+body_plot <- ggplot(filter(cwm_temp_plots, model %in% c("body_mod")), aes(x = model, y = estimate)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
   labs(x = "", y = "Change over time", title = "Regional") +
-  scale_fill_viridis_d() +
   scale_x_discrete(labels = c("body_mod" = "Log(body size (g))")) +
   geom_hline(yintercept = 0, lty = 2, cex = 1)
 
@@ -2141,11 +2194,9 @@ cwm_hab_plots <- cwm_unnest %>%
   unnest(cols = c("table")) %>%
   filter(term == "year_bin")
 
-for_plots <- ggplot(filter(cwm_hab_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate, fill = model)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1) +
-  theme(legend.position = "none") +
+for_plots <- ggplot(filter(cwm_hab_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
   labs(x = "", y = "Change over time", title = "Local") +
-  scale_fill_viridis_d() +
   scale_x_discrete(labels = c("mean_mod" = "% Forest mean", "range_mod" = "% Forest range")) +
   geom_hline(yintercept = 0, lty = 2, cex = 1)
 

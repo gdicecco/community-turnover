@@ -2074,6 +2074,21 @@ cwm_traits <- bbs_aou_temp_range %>%
   left_join(body_size, by = c("aou" = "AOU")) %>%
   na.omit()
 
+# CWM trait correlations
+
+cwm_traits_plot <- cwm_traits %>%
+  left_join(fourletter_codes)
+
+cor(cwm_traits_plot[, c(2:4, 9)])
+
+ggplot(cwm_traits_plot, aes(x = temp_mean, y = temp_range)) + geom_text(aes(label = SPEC)) +
+  labs(x = "Mean temperature", y = "Temperature range")
+ggsave("figures/temp_traits_spp.pdf", units = "in", height = 6, width = 8)
+
+ggplot(cwm_traits_plot, aes(x = propFor, y = for_range)) + geom_text(aes(label = SPEC)) +
+  labs(x = "Mean forest", y = "Forest range")
+ggsave("figures/hab_traits_spp.pdf", units = "in", height = 6, width = 8)
+
 # Climate trends
 env_vars <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
 
@@ -2143,6 +2158,8 @@ cwm_unnest <- cwm_input %>%
 # write.csv(cwm_unnest, "data/cwm_traits_all_scales.csv", row.names = F)
 cwm_unnest <- read.csv("data/cwm_traits_all_scales.csv", stringsAsFactors = F)
 
+## CWM linear models
+
 cwm_temp_plots <- cwm_unnest %>%
   filter(scale == 21, spp == "no transients") %>%
   group_by(focal_rte) %>%
@@ -2207,115 +2224,405 @@ plot_grid(foraging_plot, trophic_plot, mig_plot, temp_plots, body_plot, for_plot
           labels = c("A", "B", "C", "D", "E", "F"), label_size = 17)
 ggsave("figures/guild_niche_impacts.pdf", units = "in", height = 10, width = 15)
 
-#### Change in niche specialization over time ####
-### For each species, what is temp range and mean, forest range and mean of occurrences in each time window
-### Slope of these four variables with time
+# Maps of CWMs
 
-temp_range <- function(clims) {
-  quants <- quantile(clims, c(0.05, 0.95), na.rm = T)
-  quants[[2]] - quants[[1]]
-}
+cwm_temp_shape <- cwm_temp_plots %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
 
-bbs_mean_temp <- read.csv("data/bbs_routes_breeding_season_climate.csv", stringsAsFactors = F)
-bbs_mean_temp$mean_temp <- rowMeans(bbs_mean_temp[,2:3])
+cwm_hab_shape <- cwm_hab_plots %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
 
-bbs_yearbin_temp <- bbs_mean_temp %>%
-  left_join(routes) %>%
-  group_by(countrynum) %>%
-  nest() %>%
-  mutate(year_bins = map2(countrynum, data, ~{
-    country <- .x
-    df <- .y
+temp_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_temp_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp range")
+
+temp_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_temp_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp mean")
+
+body_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_temp_shape, model == "body_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Body size")
+
+regional_maps <- tmap_arrange(temp_mean_map, temp_range_map, body_map, nrow = 2)
+tmap_save(regional_maps, "figures/cwms_regional_scale.pdf", units = "in", height = 10, width = 10)
+
+hab_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_hab_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest range")
+
+hab_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_hab_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest mean")
+
+local_maps <- tmap_arrange(hab_mean_map, hab_range_map, nrow = 1)
+tmap_save(local_maps, "figures/cwms_local_scale.pdf", units = "in", height = 5, width = 10)
+
+
+## CMs - no abundance weighting
+
+cm_input <- bbs_subset %>%
+  ungroup() %>%
+  distinct(stateroute, bcr) %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  dplyr::select(stateroute) %>%
+  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
+  unnest(cols = c(scale)) %>%
+  mutate(model_input = map2(stateroute, scale, ~{
+    bbs_route_distances %>%
+      filter(focal_rte == .x) %>%
+      arrange(distance) %>%
+      slice(1:.y)
+  }),
+  input_vars = purrr::map(model_input, ~{
+    df <- .
     
-    if(country == 124) {
-      df %>%
-        mutate(year_bin = case_when(year >= 1990 & year <= 1993 ~ 1990,
-                                    year >= 1994 & year <= 1997 ~ 1994,
-                                    year >= 1998 & year <= 2001 ~ 1998,
-                                    year >= 2002 & year <= 2005 ~ 2002,
-                                    TRUE ~ 2006))
-    } else {
-      df %>%
-        mutate(year_bin = case_when(year >= 1992 & year <= 1995 ~ 1992,
-                                    year >= 1996 & year <= 1999 ~ 1996,
-                                    year >= 2000 & year <= 2003 ~ 2000,
-                                    year >= 2004 & year <= 2007 ~ 2004,
-                                    year >= 2008 & year <= 2011 ~ 2008,
-                                    year >= 2012 & year <= 2016 ~ 2012))
-    }
+    cwm_core <- log_abund_core_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin, aou) %>%
+      summarize_all(mean, na.rm = T) %>%
+      left_join(cwm_traits) %>%
+      group_by(year_bin) %>%
+      summarize(cwm_temp_range = mean(temp_range, na.rm = T),
+                cwm_temp_mean = mean(temp_mean, na.rm = T),
+                cwm_for_range = mean(for_range, na.rm = T),
+                cwm_for_mean = mean(propFor, na.rm = T),
+                cwm_logmass = mean(logMass, na.rm =T)) %>%
+      mutate(spp = "no transients",
+             focal_rte = unique(df$focal_rte))
+    
+    cwm_core
+    
+  }))
+
+cm_unnest <- cm_input %>%
+  dplyr::select(-model_input) %>%
+  unnest(cols = c(input_vars))
+# write.csv(cm_unnest, "data/community_means_noAbund.csv", row.names = F)
+
+
+cm_temp_plots <- cm_unnest %>%
+  filter(scale == 21, spp == "no transients") %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
+  }),
+  body_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_logmass ~ year_bin, data = df))
   })) %>%
   dplyr::select(-data) %>%
-  unnest(cols = c("year_bins")) %>%
-  group_by(countrynum, stateroute, year_bin) %>%
-  summarize(meanTemp = mean(mean_temp, na.rm = T))
-
-spp_temp_niche <- log_abund_core_long %>%
-  left_join(bbs_yearbin_temp, by = c("stateroute", "year_bin")) %>%
-  group_by(year_bin, aou) %>%
-  summarize(temp_mean = mean(meanTemp, na.rm = T),
-            temp_range = temp_range(meanTemp),
-            nRoutes = n_distinct(stateroute)) %>%
-  filter(nRoutes >= 10) %>% # 228 species
-  group_by(aou) %>%
-  nest() %>%
-  mutate(mean_mod = purrr::map(data, ~{
-    df <- .
-    lm(temp_mean ~ year_bin, data = df)
-  }),
-  range_mod = purrr::map(data, ~{
-    df <- .
-    lm(temp_range ~ year_bin, data = df)
-  }),
-  mean_tidy = purrr::map(mean_mod, ~tidy(.)),
-  range_tidy = purrr::map(range_mod, ~tidy(.)),
-  n_years = purrr::map_dbl(data, ~nrow(.)),
-  delta_mean = purrr::map_dbl(data, ~{
-    df <- .
-    df$temp_mean[df$year_bin == max(df$year_bin)] - df$temp_mean[df$year_bin == min(df$year_bin)]
-  }),
-  delta_range = purrr::map_dbl(data, ~{
-    df <- .
-    df$temp_range[df$year_bin == max(df$year_bin)] - df$temp_range[df$year_bin == min(df$year_bin)]
-  })) %>%
-  dplyr::select(-data, -mean_mod, -range_mod) %>%
-  pivot_longer(mean_tidy:range_tidy, names_to = "model", values_to = "tidy") %>%
-  unnest(cols = c("tidy"))
-
-# Fig: violin plot, delta ranges and delta mean temps
-
-delta_plot <- spp_temp_niche %>%
-  dplyr::select(aou, delta_range, delta_mean) %>%
-  ungroup() %>%
-  distinct() %>%
-  pivot_longer(delta_range:delta_mean, names_to = "niche_prop", values_to = "delta")
-
-ggplot(delta_plot, aes(x = niche_prop, y = delta)) + geom_violin(draw_quantiles = c(0.5), fill = "gray") +
-  geom_hline(yintercept = 0, lty = 2, cex = 1) +
-  labs(x = "", y = "Change betw first and last time period (deg. C)") +
-  scale_x_discrete(labels = c("delta_mean" = "Mean temperature", "delta_range" = "Temperature range"))
-ggsave("figures/temperature_niche_changes.pdf")
-
-# Fig: violin plot, temp range and mean slopes
-
-slope_plot <- spp_temp_niche %>%
+  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
   filter(term == "year_bin")
 
-ggplot(slope_plot, aes(x = model, y = estimate)) + geom_violin(draw_quantiles = c(0.5), fill = "gray") +
-  geom_hline(yintercept = 0, lty = 2, cex = 1) +
-  labs(x = "", y = "Slope of temperature niche change (deg. C/year)") +
-  scale_x_discrete(labels = c("mean_tidy" = "Mean temperature", "range_tidy" = "Temperature range"))
-ggsave("figures/temperature_niche_slopes.pdf")
+temp_plots <- ggplot(filter(cm_temp_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+  labs(x = "", y = "Change over time", title = "Regional") +
+  scale_x_discrete(labels = c("mean_mod" = "Temperature mean", "range_mod" = "Temperature range")) +
+  geom_hline(yintercept = 0, lty = 2, cex = 1)
 
-trait_vs_change <- spp_temp_niche %>%
-  dplyr::select(aou, delta_range, delta_mean) %>%
+
+body_plot <- ggplot(filter(cm_temp_plots, model %in% c("body_mod")), aes(x = model, y = estimate)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+  labs(x = "", y = "Change over time", title = "Regional") +
+  scale_x_discrete(labels = c("body_mod" = "Log(body size (g))")) +
+  geom_hline(yintercept = 0, lty = 2, cex = 1)
+
+cm_hab_plots <- cm_unnest %>%
+  filter(scale == 2, spp == "no transients") %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_mean ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+for_plots <- ggplot(filter(cm_hab_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
+  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+  labs(x = "", y = "Change over time", title = "Local") +
+  scale_x_discrete(labels = c("mean_mod" = "% Forest mean", "range_mod" = "% Forest range")) +
+  geom_hline(yintercept = 0, lty = 2, cex = 1)
+
+plot_grid(temp_plots, body_plot, for_plots, ncol = 2)
+# ggsave("figures/cms_noAbund_breadth_position.pdf", units = "in", height = 10, width = 10)
+
+# Maps of CMs - no abundance
+
+cm_temp_shape <- cm_temp_plots %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+cm_hab_shape <- cm_hab_plots %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+temp_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cm_temp_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp range")
+
+temp_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cm_temp_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp mean")
+
+body_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cm_temp_shape, model == "body_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Body size")
+
+regional_maps <- tmap_arrange(temp_mean_map, temp_range_map, body_map, nrow = 2)
+tmap_save(regional_maps, "figures/cms_noAbund_regional_scale.pdf", units = "in", height = 10, width = 10)
+
+hab_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cm_hab_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest range")
+
+hab_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cm_hab_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest mean")
+
+local_maps <- tmap_arrange(hab_mean_map, hab_range_map, nrow = 1)
+tmap_save(local_maps, "figures/cms_noAbund_local_scale.pdf", units = "in", height = 5, width = 10)
+
+
+## Guild CWMs
+
+cwm_foraging_input <- bbs_subset %>%
   ungroup() %>%
-  distinct() %>%
-  left_join(cwm_traits)
+  distinct(stateroute, bcr) %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  dplyr::select(stateroute) %>%
+  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
+  unnest(cols = c(scale)) %>%
+  mutate(model_input = map2(stateroute, scale, ~{
+    bbs_route_distances %>%
+      filter(focal_rte == .x) %>%
+      arrange(distance) %>%
+      slice(1:.y)
+  }),
+  input_vars = purrr::map(model_input, ~{
+    df <- .
+    
+    cwm_core <- log_abund_core_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin, aou) %>%
+      summarize_all(mean, na.rm = T) %>%
+      left_join(cwm_traits) %>%
+      left_join(bird_traits, by = c("aou" = "AOU")) %>%
+      mutate(wtd_temp_range = mean_abund*temp_range,
+             wtd_temp_mean = mean_abund*temp_mean,
+             wtd_for_range = mean_abund*for_range,
+             wtd_for_mean = mean_abund*propFor,
+             wtd_logmass = mean_abund*logMass) %>%
+      group_by(year_bin, Foraging) %>%
+      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
+                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
+                cwm_for_range = mean(wtd_for_range, na.rm = T),
+                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
+                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+      mutate(spp = "no transients",
+             focal_rte = unique(df$focal_rte))
+    
+    cwm_core
+    
+  }))
 
-temp_range <- ggplot(trait_vs_change, aes(x = temp_range, y = delta_range)) + geom_point() + geom_smooth(method = "lm", se = F) +
-  labs(x = "Temperature range", y = "Change in temperature range")
-temp_mean <- ggplot(trait_vs_change, aes(x = temp_mean, y = delta_mean)) + geom_point() + geom_smooth(method = "lm", se = F) +
-  labs(x = "Mean temperature", y = "Change in mean temperature")
+cwm_foraging_unnest <- cwm_foraging_input %>%
+  dplyr::select(-model_input) %>%
+  unnest(cols = c(input_vars)) %>%
+  mutate(trait_grp = "Foraging") %>%
+  rename("trait_val" = "Foraging")
 
-plot_grid(temp_mean, temp_range, ncol = 2)
-ggsave("figures/niche_vs_niche_shifts.pdf", units = "in", height = 6, width = 10)
+cwm_mig_input <- bbs_subset %>%
+  ungroup() %>%
+  distinct(stateroute, bcr) %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  dplyr::select(stateroute) %>%
+  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
+  unnest(cols = c(scale)) %>%
+  mutate(model_input = map2(stateroute, scale, ~{
+    bbs_route_distances %>%
+      filter(focal_rte == .x) %>%
+      arrange(distance) %>%
+      slice(1:.y)
+  }),
+  input_vars = purrr::map(model_input, ~{
+    df <- .
+    
+    cwm_core <- log_abund_core_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin, aou) %>%
+      summarize_all(mean, na.rm = T) %>%
+      left_join(cwm_traits) %>%
+      left_join(bird_traits, by = c("aou" = "AOU")) %>%
+      mutate(wtd_temp_range = mean_abund*temp_range,
+             wtd_temp_mean = mean_abund*temp_mean,
+             wtd_for_range = mean_abund*for_range,
+             wtd_for_mean = mean_abund*propFor,
+             wtd_logmass = mean_abund*logMass) %>%
+      group_by(year_bin, migclass) %>%
+      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
+                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
+                cwm_for_range = mean(wtd_for_range, na.rm = T),
+                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
+                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+      mutate(spp = "no transients",
+             focal_rte = unique(df$focal_rte))
+    
+    cwm_core
+    
+  }))
+
+cwm_mig_unnest <- cwm_mig_input %>%
+  dplyr::select(-model_input) %>%
+  unnest(cols = c(input_vars)) %>%
+  mutate(trait_grp = "migclass") %>%
+  rename("trait_val" = "migclass")
+
+cwm_trophic_input <- bbs_subset %>%
+  ungroup() %>%
+  distinct(stateroute, bcr) %>%
+  filter(bcr %in% bcr_subset$bcr) %>%
+  dplyr::select(stateroute) %>%
+  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
+  unnest(cols = c(scale)) %>%
+  mutate(model_input = map2(stateroute, scale, ~{
+    bbs_route_distances %>%
+      filter(focal_rte == .x) %>%
+      arrange(distance) %>%
+      slice(1:.y)
+  }),
+  input_vars = purrr::map(model_input, ~{
+    df <- .
+    
+    cwm_core <- log_abund_core_long %>%
+      filter(stateroute %in% df$stateroute) %>%
+      group_by(year_bin, aou) %>%
+      summarize_all(mean, na.rm = T) %>%
+      left_join(cwm_traits) %>%
+      left_join(bird_traits, by = c("aou" = "AOU")) %>%
+      mutate(wtd_temp_range = mean_abund*temp_range,
+             wtd_temp_mean = mean_abund*temp_mean,
+             wtd_for_range = mean_abund*for_range,
+             wtd_for_mean = mean_abund*propFor,
+             wtd_logmass = mean_abund*logMass) %>%
+      group_by(year_bin, Trophic.Group) %>%
+      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
+                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
+                cwm_for_range = mean(wtd_for_range, na.rm = T),
+                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
+                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+      mutate(spp = "no transients",
+             focal_rte = unique(df$focal_rte))
+    
+    cwm_core
+    
+  }))
+
+cwm_trophic_unnest <- cwm_trophic_input %>%
+  dplyr::select(-model_input) %>%
+  unnest(cols = c(input_vars)) %>%
+  mutate(trait_grp = "Trophic.Group") %>%
+  rename("trait_val" = "Trophic.Group")
+
+cwm_guild_unnest <- bind_rows(cwm_foraging_unnest, cwm_mig_unnest, cwm_trophic_unnest)
+
+
+cwm_guild_temp_plots <- cwm_guild_unnest %>%
+  filter(scale == 21, spp == "no transients") %>%
+  group_by(focal_rte, trait_grp, trait_val) %>%
+  filter(!is.na(trait_val)) %>%
+  nest() %>%
+  mutate(n_bins = purrr::map_dbl(data, ~{nrow(.)})) %>%
+  filter(n_bins == 5 | n_bins == 6) %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
+  }),
+  body_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_logmass ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+guild_plot_labels <- data.frame(mod = c("mean_mod", "range_mod", "body_mod"), label = c("Mean temp", "Temp range", "Body size"))
+
+for(i in 1:3) {
+  mod <- guild_plot_labels$mod[i]
+  lab <- guild_plot_labels$label[i]
+  
+  forage_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    labs(x = "Change in CWM", x = "", title = lab) + coord_flip() +
+    geom_hline(yintercept = 0, lty = 2, cex = 1)
+  
+  trophic_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
+    geom_hline(yintercept = 0, lty = 2, cex = 1)
+  
+  mig_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
+    geom_hline(yintercept = 0, lty = 2, cex = 1)
+  
+  plot_grid(forage_plot, trophic_plot, mig_plot, nrow = 1)
+  ggsave(paste0('figures/cwm_guild_plot', mod, ".pdf"), units = "in", height = 5, width = 15)
+}
+
+cwm_guild_hab_plots <- cwm_guild_unnest %>%
+  filter(scale == 2, spp == "no transients") %>%
+  group_by(focal_rte, trait_grp, trait_val) %>%
+  filter(!is.na(trait_val)) %>%
+  nest() %>%
+  mutate(n_bins = purrr::map_dbl(data, ~{nrow(.)})) %>%
+  filter(n_bins == 5 | n_bins == 6) %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_mean ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+guild_hab_plot_labels <- data.frame(mod = c("mean_mod", "range_mod"), label = c("Mean forest", "Forest range"))
+
+for(i in 1:2) {
+  mod <- guild_hab_plot_labels$mod[i]
+  lab <- guild_hab_plot_labels$label[i]
+  
+  forage_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    labs(x = "Change in CWM", x = "", title = lab) + coord_flip() +
+    geom_hline(yintercept = 0, lty = 2, cex = 1)
+  
+  trophic_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
+    geom_hline(yintercept = 0, lty = 2, cex = 1)
+  
+  mig_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
+    geom_hline(yintercept = 0, lty = 2, cex = 1)
+  
+  plot_grid(forage_plot, trophic_plot, mig_plot, nrow = 1)
+  ggsave(paste0('figures/cwm_guild_plot_hab_', mod, ".pdf"), units = "in", height = 5, width = 15)
+}

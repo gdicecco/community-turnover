@@ -36,6 +36,13 @@ bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
 species_list <- read.csv("data/species_list.csv", stringsAsFactors = F)
 fourletter_codes <- read.csv("data/four_letter_codes_aous.csv", stringsAsFactors = F)
 
+# Species traits/guilds
+
+bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
+  select(AOU, CommonName, Foraging, Trophic.Group, migclass)
+
+habitat_guilds <- read.csv("data/habitat_guilds_new_aous.csv", stringsAsFactors = F)
+
 # BBS sampled every 5 years from 1970 to 2016
 log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors = F)
 
@@ -1141,11 +1148,6 @@ spp_cor <- regional_abund_trends %>%
 # write.csv(spp_cor, "data/high_leverage_spp.csv", row.names = F)
 
 # Compare correlations of directionality with habitat, trophic guild abund trends
-
-bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
-  select(AOU, CommonName, Foraging, Trophic.Group, migclass)
-
-habitat_guilds <- read.csv("data/habitat_guilds_new_aous.csv", stringsAsFactors = F)
 
 foraging_cor <- regional_abund_trends %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
@@ -2424,7 +2426,8 @@ cwm_foraging_input <- bbs_subset %>%
                 cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
                 cwm_for_range = mean(wtd_for_range, na.rm = T),
                 cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+                cwm_logmass = mean(wtd_logmass, na.rm =T),
+                abund = sum(mean_abund, na.rm = T)) %>%
       mutate(spp = "no transients",
              focal_rte = unique(df$focal_rte))
     
@@ -2470,7 +2473,8 @@ cwm_mig_input <- bbs_subset %>%
                 cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
                 cwm_for_range = mean(wtd_for_range, na.rm = T),
                 cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+                cwm_logmass = mean(wtd_logmass, na.rm =T),
+                abund = sum(mean_abund, na.rm = T)) %>%
       mutate(spp = "no transients",
              focal_rte = unique(df$focal_rte))
     
@@ -2516,7 +2520,8 @@ cwm_trophic_input <- bbs_subset %>%
                 cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
                 cwm_for_range = mean(wtd_for_range, na.rm = T),
                 cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
+                cwm_logmass = mean(wtd_logmass, na.rm =T),
+                abund = sum(mean_abund, na.rm = T)) %>%
       mutate(spp = "no transients",
              focal_rte = unique(df$focal_rte))
     
@@ -2531,7 +2536,7 @@ cwm_trophic_unnest <- cwm_trophic_input %>%
   rename("trait_val" = "Trophic.Group")
 
 cwm_guild_unnest <- bind_rows(cwm_foraging_unnest, cwm_mig_unnest, cwm_trophic_unnest)
-
+write.csv(cwm_guild_unnest, "data/cwm_guild_data_unnest.csv", row.names = F)
 
 cwm_guild_temp_plots <- cwm_guild_unnest %>%
   filter(scale == 21, spp == "no transients") %>%
@@ -2559,22 +2564,37 @@ cwm_guild_temp_plots <- cwm_guild_unnest %>%
 
 guild_plot_labels <- data.frame(mod = c("mean_mod", "range_mod", "body_mod"), label = c("Mean temp", "Temp range", "Body size"))
 
+forage_n <- bird_traits %>%
+  group_by(Foraging) %>%
+  count()
+
+trophic_n <- bird_traits %>%
+  group_by(Trophic.Group) %>%
+  count()
+
+mig_n <- bird_traits %>%
+  group_by(migclass) %>%
+  count()
+
 for(i in 1:3) {
   mod <- guild_plot_labels$mod[i]
   lab <- guild_plot_labels$label[i]
   
   forage_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate)) +
     geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    labs(x = "Change in CWM", x = "", title = lab) + coord_flip() +
+    annotate(geom = "text", x = forage_n$Foraging, y = max(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging")$estimate) - 1, label = forage_n$n) +
+    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
     geom_hline(yintercept = 0, lty = 2, cex = 1)
   
   trophic_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate)) +
     geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    annotate(geom = "text", x = trophic_n$Trophic.Group, y = max(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group")$estimate) - 1, label = trophic_n$n) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
     geom_hline(yintercept = 0, lty = 2, cex = 1)
   
   mig_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate)) +
     geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    annotate(geom = "text", x = mig_n$migclass, y = max(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass")$estimate) - 1, label = mig_n$n) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
     geom_hline(yintercept = 0, lty = 2, cex = 1)
   
@@ -2610,16 +2630,19 @@ for(i in 1:2) {
   
   forage_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate)) +
     geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    labs(x = "Change in CWM", x = "", title = lab) + coord_flip() +
+    annotate(geom = "text", x = forage_n$Foraging, y = max(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging")$estimate) - 1, label = forage_n$n) +
+    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
     geom_hline(yintercept = 0, lty = 2, cex = 1)
   
   trophic_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate)) +
     geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    annotate(geom = "text", x = trophic_n$Trophic.Group, y = max(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group")$estimate) - 1, label = trophic_n$n) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
     geom_hline(yintercept = 0, lty = 2, cex = 1)
   
   mig_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate)) +
     geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
+    annotate(geom = "text", x = mig_n$migclass, y = max(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass")$estimate) - 1, label = mig_n$n) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
     geom_hline(yintercept = 0, lty = 2, cex = 1)
   

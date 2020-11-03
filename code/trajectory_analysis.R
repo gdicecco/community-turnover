@@ -2536,7 +2536,7 @@ cwm_trophic_unnest <- cwm_trophic_input %>%
   rename("trait_val" = "Trophic.Group")
 
 cwm_guild_unnest <- bind_rows(cwm_foraging_unnest, cwm_mig_unnest, cwm_trophic_unnest)
-write.csv(cwm_guild_unnest, "data/cwm_guild_data_unnest.csv", row.names = F)
+# write.csv(cwm_guild_unnest, "data/cwm_guild_data_unnest.csv", row.names = F)
 
 cwm_guild_temp_plots <- cwm_guild_unnest %>%
   filter(scale == 21, spp == "no transients") %>%
@@ -2556,50 +2556,63 @@ cwm_guild_temp_plots <- cwm_guild_unnest %>%
   body_mod = purrr::map(data, ~{
     df <- .
     tidy(lm(cwm_logmass ~ year_bin, data = df))
+  }),
+  abund_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(abund ~ year_bin, data = df))
   })) %>%
   dplyr::select(-data) %>%
-  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
+  pivot_longer(range_mod:abund_mod, names_to = "model", values_to = "table") %>%
   unnest(cols = c("table")) %>%
-  filter(term == "year_bin")
+  filter(term == "year_bin") %>%
+  group_by(trait_grp, trait_val) %>%
+  mutate(abund_trend = median(estimate[model == "abund_mod"]))
 
 guild_plot_labels <- data.frame(mod = c("mean_mod", "range_mod", "body_mod"), label = c("Mean temp", "Temp range", "Body size"))
 
 forage_n <- bird_traits %>%
   group_by(Foraging) %>%
-  count()
+  count() %>%
+  mutate(label = paste0(Foraging, " (", n, ")"))
 
 trophic_n <- bird_traits %>%
+  filter(Trophic.Group != "frugivore") %>%
   group_by(Trophic.Group) %>%
-  count()
+  count() %>%
+  mutate(label = paste0(Trophic.Group, " (", n, ")"))
 
 mig_n <- bird_traits %>%
   group_by(migclass) %>%
-  count()
+  count() %>%
+  mutate(label = paste0(migclass, " (", n, ")"))
 
 for(i in 1:3) {
   mod <- guild_plot_labels$mod[i]
   lab <- guild_plot_labels$label[i]
   
-  forage_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    annotate(geom = "text", x = forage_n$Foraging, y = max(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging")$estimate) - 1, label = forage_n$n) +
+  forage_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5)) +
+    scale_fill_distiller(palette = "RdBu") +
+    scale_x_discrete(labels = forage_n$label) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2, cex = 1)
+    geom_hline(yintercept = 0, lty = 2)
   
-  trophic_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    annotate(geom = "text", x = trophic_n$Trophic.Group, y = max(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group")$estimate) - 1, label = trophic_n$n) +
+  trophic_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5)) +
+    scale_fill_distiller(palette = "RdBu") +
+   scale_x_discrete(labels = trophic_n$label) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2, cex = 1)
+    geom_hline(yintercept = 0, lty = 2)
   
-  mig_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    annotate(geom = "text", x = mig_n$migclass, y = max(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass")$estimate) - 1, label = mig_n$n) +
+  mig_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5)) +
+    scale_fill_distiller(palette = "RdBu") +
+    scale_x_discrete(labels = mig_n$label) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2, cex = 1)
+    geom_hline(yintercept = 0, lty = 2)
   
   plot_grid(forage_plot, trophic_plot, mig_plot, nrow = 1)
-  ggsave(paste0('figures/cwm_guild_plot', mod, ".pdf"), units = "in", height = 5, width = 15)
+  ggsave(paste0('figures/cwm_guild_plot', mod, ".pdf"), units = "in", height = 5, width = 18)
 }
 
 cwm_guild_hab_plots <- cwm_guild_unnest %>%
@@ -2616,11 +2629,17 @@ cwm_guild_hab_plots <- cwm_guild_unnest %>%
   mean_mod = purrr::map(data, ~{
     df <- .
     tidy(lm(cwm_for_mean ~ year_bin, data = df))
+  }),
+  abund_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(abund ~ year_bin, data = df))
   })) %>%
   dplyr::select(-data) %>%
-  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
+  pivot_longer(range_mod:abund_mod, names_to = "model", values_to = "table") %>%
   unnest(cols = c("table")) %>%
-  filter(term == "year_bin")
+  filter(term == "year_bin") %>%
+  group_by(trait_grp, trait_val) %>%
+  mutate(abund_trend = median(estimate[model == "abund_mod"]))
 
 guild_hab_plot_labels <- data.frame(mod = c("mean_mod", "range_mod"), label = c("Mean forest", "Forest range"))
 
@@ -2628,24 +2647,110 @@ for(i in 1:2) {
   mod <- guild_hab_plot_labels$mod[i]
   lab <- guild_hab_plot_labels$label[i]
   
-  forage_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    annotate(geom = "text", x = forage_n$Foraging, y = max(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging")$estimate) - 1, label = forage_n$n) +
+  forage_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5)) +
+    scale_fill_distiller(palette = "RdBu") +
+    scale_x_discrete(labels = forage_n$label) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2, cex = 1)
+    geom_hline(yintercept = 0, lty = 2)
   
-  trophic_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    annotate(geom = "text", x = trophic_n$Trophic.Group, y = max(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group")$estimate) - 1, label = trophic_n$n) +
+  trophic_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5)) +
+    scale_fill_distiller(palette = "RdBu") +
+    scale_x_discrete(labels = trophic_n$label) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2, cex = 1)
+    geom_hline(yintercept = 0, lty = 2)
   
-  mig_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-    annotate(geom = "text", x = mig_n$migclass, y = max(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass")$estimate) - 1, label = mig_n$n) +
+  mig_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
+    geom_violin(trim = T, draw_quantiles = c(0.5)) +
+    scale_fill_distiller(palette = "RdBu") +
+    scale_x_discrete(labels = mig_n$label) +
     labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2, cex = 1)
+    geom_hline(yintercept = 0, lty = 2)
   
   plot_grid(forage_plot, trophic_plot, mig_plot, nrow = 1)
-  ggsave(paste0('figures/cwm_guild_plot_hab_', mod, ".pdf"), units = "in", height = 5, width = 15)
+  ggsave(paste0('figures/cwm_guild_plot_hab_', mod, ".pdf"), units = "in", height = 5, width = 18)
+}
+
+## Guild CWMs -- maps
+# Which guild matches closest to overall cwm value
+
+cwm_temp_compare <- cwm_temp_plots %>%
+  dplyr::select(focal_rte, model, estimate) %>%
+  rename("total_cwm" = estimate) %>%
+  right_join(cwm_guild_temp_plots, by = c("focal_rte", "model")) %>%
+  filter(model != "abund_mod") %>%
+  group_by(focal_rte, trait_grp, model) %>%
+  filter(ifelse(total_cwm > 0, estimate == max(estimate), estimate == min(estimate))) %>%
+  mutate(abs_est = abs(estimate),
+         est_sign = ifelse(estimate > 0, "+", NA)) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude")) %>%
+  st_set_crs(4326)
+
+# Temperature mean, range, body size, 3 panels (1 per guild)
+
+for(i in c("mean_mod", "range_mod", "body_mod")) {
+
+map_mean_for <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "Foraging")) + 
+  tm_dots(col = "trait_val", size = "abs_est") +
+  tm_shape(filter(cwm_temp_compare, model == "mean_mod", trait_grp == "Foraging", est_sign == "+")) + 
+  tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
+
+map_mean_trop <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "Trophic.Group")) + 
+  tm_dots(col = "trait_val", size = "abs_est") +
+  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "Trophic.Group", est_sign == "+")) + 
+  tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
+
+map_mean_mig <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "migclass")) + 
+  tm_dots(col = "trait_val", size = "abs_est") +
+  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "migclass", est_sign == "+")) + 
+  tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
+
+map_guild <- tmap_arrange(map_mean_for, map_mean_trop, map_mean_mig, nrow = 2)
+tmap_save(map_guild, paste0("figures/cwm_guild_map_", i, ".pdf"), units = "in", height = 12, width = 10)
+
+}
+
+cwm_hab_compare <- cwm_hab_plots %>%
+  dplyr::select(focal_rte, model, estimate) %>%
+  rename("total_cwm" = estimate) %>%
+  right_join(cwm_guild_hab_plots, by = c("focal_rte", "model")) %>%
+  filter(model != "abund_mod") %>%
+  group_by(focal_rte, trait_grp, model) %>%
+  filter(ifelse(total_cwm > 0, estimate == max(estimate), estimate == min(estimate))) %>%
+  mutate(abs_est = abs(estimate),
+         est_sign = ifelse(estimate > 0, "+", NA)) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude")) %>%
+  st_set_crs(4326)
+
+# Habitat mean, range, body size, 3 panels (1 per guild)
+
+for(i in c("mean_mod", "range_mod")) {
+  
+  map_mean_for <- tm_shape(na) + tm_polygons(col = "gray50") + 
+    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "Foraging")) + 
+    tm_dots(col = "trait_val", size = "abs_est") +
+    tm_shape(filter(cwm_hab_compare, model == "mean_mod", trait_grp == "Foraging", est_sign == "+")) + 
+    tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
+  
+  map_mean_trop <- tm_shape(na) + tm_polygons(col = "gray50") + 
+    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "Trophic.Group")) + 
+    tm_dots(col = "trait_val", size = "abs_est") +
+    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "Trophic.Group", est_sign == "+")) + 
+    tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
+  
+  map_mean_mig <- tm_shape(na) + tm_polygons(col = "gray50") + 
+    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "migclass")) + 
+    tm_dots(col = "trait_val", size = "abs_est") +
+    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "migclass", est_sign == "+")) + 
+    tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
+  
+  map_guild <- tmap_arrange(map_mean_for, map_mean_trop, map_mean_mig, nrow = 2)
+  tmap_save(map_guild, paste0("figures/cwm_guild_map_hab_", i, ".pdf"), units = "in", height = 12, width = 10)
+  
 }

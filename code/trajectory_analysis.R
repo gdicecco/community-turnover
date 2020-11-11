@@ -2299,6 +2299,9 @@ cm_unnest <- cm_input %>%
   unnest(cols = c(input_vars))
 # write.csv(cm_unnest, "data/community_means_noAbund.csv", row.names = F)
 
+## CM null models
+
+
 
 cm_temp_plots <- cm_unnest %>%
   filter(scale == 21, spp == "no transients") %>%

@@ -165,3 +165,122 @@ regional_null <- cm_null_means %>%
 write.csv(regional_null, "bigdata/community_mean_null_mod_res_regional_scale.csv", row.names = F)
 
 
+#### Figures ####
+
+library(tidyverse)
+library(purrr)
+library(broom)
+
+theme_set(theme_classic(base_size = 15))
+
+# Null model output
+local_null <- read.csv("bigdata/community_mean_null_mod_res_local_scale.csv", stringsAsFactors = F)
+regional_null <- read.csv("bigdata/community_mean_null_mod_res_regional_scale.csv", stringsAsFactors = F)
+
+# CM empirical
+cm_unnest <- read.csv("data/community_means_noAbund.csv", stringsAsFactors = F)
+
+cm_temp_plots <- cm_unnest %>%
+  filter(scale == 21, spp == "no transients") %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
+  }),
+  body_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_logmass ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+cm_hab_plots <- cm_unnest %>%
+  filter(scale == 2, spp == "no transients") %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cwm_for_mean ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+# CM slope z scores
+
+cm_local_z <- local_null %>%
+  group_by(stateroute, sim) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cm_for_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cm_for_mean ~ year_bin, data = df))
+  })) 
+
+cm_local_z_mod <- cm_local_z %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+cm_local_z_scores <- cm_local_z_mod %>%
+  group_by(stateroute, model) %>%
+  summarize(mean_est = mean(estimate),
+            sd_est = sd(estimate)) %>%
+  left_join(cm_hab_plots, by = c("stateroute" = "focal_rte", "model")) %>%
+  mutate(z_est = (estimate - mean_est)/sd_est)
+
+ggplot(cm_local_z_scores, aes(x = model, y = z_est)) + 
+  geom_violin(draw_quantiles = c(0.5), fill = "gray") + geom_hline(yintercept = 0, lty = 2) +
+  labs(x = "Proportion forest cover", y = "Z-Community mean slope")
+ggsave("figures/community_mean_habitat_z-score.pdf")
+
+Sys.time()
+cm_regional_z <- regional_null %>%
+  group_by(stateroute, sim) %>%
+  nest() %>%
+  mutate(range_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cm_temp_range ~ year_bin, data = df))
+  }),
+  mean_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cm_temp_mean ~ year_bin, data = df))
+  }),
+  body_mod = purrr::map(data, ~{
+    df <- .
+    tidy(lm(cm_bodysize ~ year_bin, data = df))
+  })) %>%
+  dplyr::select(-data) %>%
+  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
+  unnest(cols = c("table")) %>%
+  filter(term == "year_bin")
+
+cm_regional_z_scores <- cm_regional_z %>%
+  group_by(stateroute, model) %>%
+  summarize(mean_est = mean(estimate),
+            sd_est = sd(estimate)) %>%
+  left_join(cm_temp_plots, by = c("stateroute" = "focal_rte", "model")) %>%
+  mutate(z_est = (estimate - mean_est)/sd_est)
+
+ggplot(cm_regional_z_scores, aes(x = model, y = z_est)) + 
+  geom_violin(draw_quantiles = c(0.5), fill = "gray") + geom_hline(yintercept = 0, lty = 2) +
+  labs(x = "Temperature niche/body size traits", y = "Z-Community mean slope")
+ggsave("figures/community_mean_temperature_z-score.pdf")
+
+

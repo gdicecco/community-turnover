@@ -41,7 +41,7 @@ fourletter_codes <- read.csv("data/four_letter_codes_aous.csv", stringsAsFactors
 bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
   select(AOU, CommonName, Foraging, Trophic.Group, migclass)
 
-habitat_guilds <- read.csv("data/habitat_guilds_new_aous.csv", stringsAsFactors = F)
+habitat_guilds <- read.csv("data/aaw1313_Data_S1.csv", stringsAsFactors = F)
 
 # BBS sampled every 5 years from 1970 to 2016
 log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors = F)
@@ -499,41 +499,6 @@ for(i in 1:25) {
                    joined = joined, unexpl = unexpl))
 }
 
-# 1/2 route model
-
-half_climate_trends <- bbs_half_climate %>%
-  left_join(routes) %>%
-  mutate(y1 = case_when(countrynum == 124 ~ 1990,
-                        countrynum == 840 ~ 1992),
-         y2 = case_when(countrynum == 124 ~ 2010,
-                        countrynum == 840 ~ 2016),
-         max_bins = case_when(countrynum == 124 ~ 5,
-                              countrynum == 840 ~ 6)) %>%
-  filter(year >= y1, year <= y2) %>%
-  group_by(stateroute, stops) %>%
-  nest() %>%
-  mutate(trends = map(data, ~{
-    df <- .
-    climate_trend <- possibly_climate_trend(df)
-    data.frame(trend_tmax = climate_trend$trend_tmax, trend_tmin = climate_trend$trend_tmin)
-  })) %>%
-  dplyr::select(-data) %>%
-  unnest(trends)
-
-half_route_mod_input <- half_route_dir %>%
-  mutate_at("stops", ~case_when(. == "stops1_25" ~ "1-25",
-                                . == "stops26_50" ~ "26-50")) %>%
-  left_join(half_climate_trends) %>%
-  left_join(bbs_half_landcover) %>%
-  left_join(routes) %>%
-  filter(stateroute %in% bbs_subset$stateroute, bcr %in% bcr_subset$bcr) %>%
-  rename(max_lc = "deltaCover")
-# write.csv(half_route_mod_input, "data/half_route_scale_model_input.csv", row.names = F)
-
-mod1 <- lm(dir_core ~ trend_tmax + trend_tmin, data = half_route_mod_input)
-mod2 <- lm(dir_core ~ max_lc, data = half_route_mod_input)
-mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = half_route_mod_input)
-
 mod1.r2 <- summary(mod1)$r.squared
 mod2.r2 <- summary(mod2)$r.squared
 mod12.r2 <- summary(mod12)$r.squared
@@ -543,24 +508,19 @@ part2 <- mod12.r2 - mod1.r2 # land cover alone
 joined <- mod1.r2 - part1 # shared variance
 unexpl <- 1 - mod12.r2 # unexplained variance
 
-half_route_output <- data.frame(scale = 0.5, part1 = part1, part2 = part2,
-                                       joined = joined, unexpl = unexpl)  
-
-scale_model_output_all <- bind_rows(scale_model_output, half_route_output)
 # write.csv(scale_model_output, "data/scale_model_output_variance.csv", row.names = F)
 scale_model_output <- read.csv("data/scale_model_output_variance.csv")
 
-  
 # Scale model figures 
 
 scale_model_plot <- scale_model_output %>%
-  pivot_longer(part1:unexpl, names_to = "variance")
+  pivot_longer(part1:unexpl, names_to = "variance") %>%
+  mutate_at(c("value"), .funs = ~ifelse(. < 0, 0, .))
 
-all_routes <- ggplot(filter(scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
+all_routes <- ggplot(filter(scale_model_plot, variance != "unexpl"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack", col = "white") +
-  scale_fill_manual(values = c("#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Climate", "Land cover")) +
+  scale_fill_manual(values = c("gray", "#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Shared", "Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
-ggsave("figures/scale_model_variance.pdf")
 
 # Scale model predictor effects
 
@@ -617,80 +577,6 @@ for(scale in scale_model_variables$scale) {
   print(ggplot(df, aes(x = trend_tmin, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
           labs(title = paste0("Routes = ", scale)))
 }
-dev.off()
-
-
-  
-# Map of directionality values
-
-dir_sf <- scale_model_variables_unnest %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  filter(statenum != 3) %>%
-  st_as_sf(coords = c("longitude", "latitude"))
-
-one_route <- tm_shape(na) + tm_polygons(col = "gray50") +
-  tm_shape(filter(dir_sf, scale == 1)) + 
-  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
-  tm_layout(main.title = "Route-level")
-# col breaks: 0.25-0.30, ... 0.5-0.55 by 0.5
-# 6 colors
-
-# histogram legend
-one_route_cols <- RColorBrewer::brewer.pal("YlGnBu", n = 6)
-names(one_route_cols) <- seq(1:6)
-
-one_route_vals <- dir_sf %>%
-  filter(scale == 1) %>%
-  mutate(color = case_when(dir_core > 0.25 & dir_core <= 0.30 ~ 1,
-                           dir_core > 0.30 & dir_core <= 0.35 ~ 2,
-                           dir_core > 0.35 & dir_core <= 0.40 ~ 3,
-                           dir_core > 0.40 & dir_core <= 0.45 ~ 4,
-                           dir_core > 0.45 & dir_core <= 0.50 ~ 5,
-                           dir_core > 0.50 ~ 6))
-
-one_legend <- ggplot(one_route_vals, aes(x = dir_core, fill = as.factor(color))) +
-  geom_histogram(breaks = seq(0.25, 0.55, by = 0.01)) + 
-  scale_fill_manual(values = one_route_cols) +
-  labs(x = "Directionality", y = "Count") + theme(legend.position = "none")
-
-
-tf_route <-  tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(dir_sf, scale == 25)) + 
-  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
-  tm_layout(main.title = "25 Routes")
-# col breaks: 0.25 to 0.65 by 0.5
-# 8 colors
-
-tf_route_cols <- RColorBrewer::brewer.pal("YlGnBu", n = 8)
-
-names(tf_route_cols) <- seq(1:8)
-
-tf_route_vals <- dir_sf %>%
-  filter(scale == 25) %>%
-  mutate(color = case_when(dir_core > 0.25 & dir_core <= 0.30 ~ 1,
-                           dir_core > 0.30 & dir_core <= 0.35 ~ 2,
-                           dir_core > 0.35 & dir_core <= 0.40 ~ 3,
-                           dir_core > 0.40 & dir_core <= 0.45 ~ 4,
-                           dir_core > 0.45 & dir_core <= 0.50 ~ 5,
-                           dir_core > 0.50 & dir_core <= 0.55 ~ 6,
-                           dir_core > 0.55 & dir_core <= 0.60 ~ 7,
-                           dir_core > 0.6 ~ 8))
-
-tf_legend <- ggplot(tf_route_vals, aes(x = dir_core, fill = as.factor(color))) +
-  geom_histogram(breaks = seq(0.25, 0.65, by = 0.01)) + 
-  scale_fill_manual(values = tf_route_cols) +
-  labs(x = "Directionality", y = "Count") + theme(legend.position = "none")
-
-dir_map <- tmap_arrange(one_route, tf_route, ncol = 2)
-
-vp_one <- viewport(0.1, 0.15, width = 0.175, height = 0.25)
-vp_tf <- viewport(0.6, 0.15, width = 0.175, height = 0.25)
-
-wd <- getwd()
-pdf(paste0(wd, "/figures/directionality_map.pdf"), height = 8, width = 16)
-print(dir_map)
-print(one_legend, vp = vp_one)
-print(tf_legend, vp = vp_tf)
 dev.off()
 
 #### Scale model with low/no overlap ####
@@ -974,7 +860,6 @@ low_overlap_focal_routes <- read.csv("data/low_overlap_focal_routes.csv")
 ## Run models for just focal routes 
 
 scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
-half_route_mod_input <- read.csv("data/half_route_scale_model_input.csv", stringsAsFactors = F)
 
 low_overlap_model_variables <- scale_model_variables_unnest %>%
   filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
@@ -1005,34 +890,14 @@ for(i in 1:25) {
 # write.csv(LO_scale_model_output, "data/low_overlap_scale_model_output_deviance.csv", row.names = F)
 LO_scale_model_output <- read.csv("data/low_overlap_scale_model_output_deviance.csv", stringsAsFactors = F)
 
-half_route_variables <- half_route_mod_input %>%
-  filter(stateroute %in% low_overlap_focal_routes$focal_rte)
-
-mod1 <- lm(dir_core ~ trend_tmax + trend_tmin, data = half_route_mod_input)
-mod2 <- lm(dir_core ~ max_lc, data = half_route_mod_input)
-mod12 <- lm(dir_core ~ trend_tmax + trend_tmin + max_lc, data = half_route_mod_input)
-
-mod1.r2 <- summary(mod1)$r.squared
-mod2.r2 <- summary(mod2)$r.squared
-mod12.r2 <- summary(mod12)$r.squared
-
-part1 <- mod12.r2 - mod2.r2 # climate alone
-part2 <- mod12.r2 - mod1.r2 # land cover alone
-joined <- mod1.r2 - part1 # shared variance
-unexpl <- 1 - mod12.r2 # unexplained variance
-
-half_route_output <- data.frame(scale = 0.5, part1 = part1, part2 = part2,
-                                joined = joined, unexpl = unexpl) 
-
 LO_scale_model_plot <- LO_scale_model_output %>%
-#  bind_rows(half_route_output) %>%
-  pivot_longer(part1:unexpl, names_to = "variance")
+  pivot_longer(part1:unexpl, names_to = "variance")  %>%
+  mutate_at(c("value"), .funs = ~ifelse(. < 0, 0, .))
 
-lo_overlap <- ggplot(filter(LO_scale_model_plot, variance == "part1" | variance == "part2"), aes(x = scale, y = value, fill = variance)) +
+lo_overlap <- ggplot(filter(LO_scale_model_plot, variance != "unexpl"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack", width = 0.9, col = "white") +
-  scale_fill_manual(values = c("#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Climate", "Land cover")) +
+  scale_fill_manual(values = c("gray", "#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Shared", "Climate", "Land cover")) +
   labs(x = "Aggregated routes", y = "Variance")
-ggsave("figures/low_overlap_scale_model_variance.pdf")
 
 ## Variance partitioning multipanel figure
 legend <- get_legend(all_routes)
@@ -1100,8 +965,85 @@ for(scale in low_overlap_model_variables$scale) {
 }
 dev.off()
 
+#### Map of directionality values ####
 
-#### Explaining high directionality ####
+dir_sf <- scale_model_variables_unnest %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  filter(statenum != 3) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+one_route <- tm_shape(na) + tm_polygons(col = "gray50") +
+  tm_shape(filter(dir_sf, scale == 1)) + 
+  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_layout(main.title = "A", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
+            title = "Spatial scale:\n1 route", title.position = c(0.8, 0.1))
+# col breaks: 0.25-0.30, ... 0.5-0.55 by 0.5
+# 6 colors
+
+# histogram legend
+one_route_cols <- RColorBrewer::brewer.pal("YlGnBu", n = 6)
+names(one_route_cols) <- seq(1:6)
+
+one_route_vals <- dir_sf %>%
+  filter(scale == 1) %>%
+  mutate(color = case_when(dir_core > 0.25 & dir_core <= 0.30 ~ 1,
+                           dir_core > 0.30 & dir_core <= 0.35 ~ 2,
+                           dir_core > 0.35 & dir_core <= 0.40 ~ 3,
+                           dir_core > 0.40 & dir_core <= 0.45 ~ 4,
+                           dir_core > 0.45 & dir_core <= 0.50 ~ 5,
+                           dir_core > 0.50 ~ 6))
+
+one_legend <- ggplot(one_route_vals, aes(x = dir_core, fill = as.factor(color))) +
+  geom_histogram(breaks = seq(0.25, 0.55, by = 0.01)) + 
+  scale_fill_manual(values = one_route_cols) +
+  labs(x = "Directionality", y = "Count") + theme(legend.position = "none", 
+                                                  panel.background = element_rect(fill = "transparent"), # bg of the panel
+                                                  plot.background = element_rect(fill = "transparent", color = NA)) # bg of the plot
+
+
+tf_route <-  tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(filter(dir_sf, scale == 25)) + 
+  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_layout(main.title = "B", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
+            title = "Spatial scale:\n25 routes", title.position = c(0.8, 0.1))
+# col breaks: 0.25 to 0.65 by 0.5
+# 8 colors
+
+tf_route_cols <- RColorBrewer::brewer.pal("YlGnBu", n = 8)
+
+names(tf_route_cols) <- seq(1:8)
+
+tf_route_vals <- dir_sf %>%
+  filter(scale == 25) %>%
+  mutate(color = case_when(dir_core > 0.25 & dir_core <= 0.30 ~ 1,
+                           dir_core > 0.30 & dir_core <= 0.35 ~ 2,
+                           dir_core > 0.35 & dir_core <= 0.40 ~ 3,
+                           dir_core > 0.40 & dir_core <= 0.45 ~ 4,
+                           dir_core > 0.45 & dir_core <= 0.50 ~ 5,
+                           dir_core > 0.50 & dir_core <= 0.55 ~ 6,
+                           dir_core > 0.55 & dir_core <= 0.60 ~ 7,
+                           dir_core > 0.6 ~ 8))
+
+tf_legend <- ggplot(tf_route_vals, aes(x = dir_core, fill = as.factor(color))) +
+  geom_histogram(breaks = seq(0.25, 0.65, by = 0.01)) + 
+  scale_fill_manual(values = tf_route_cols) +
+  labs(x = "Directionality", y = "Count") + theme(legend.position = "none",
+                                                  panel.background = element_rect(fill = "transparent"), # bg of the panel
+                                                  plot.background = element_rect(fill = "transparent", color = NA)) # bg of the plot
+
+vp_one <- viewport(0.1, 0.25, width = 0.175, height = 0.25)
+vp_tf <- viewport(0.6, 0.25, width = 0.175, height = 0.25)
+
+wd <- getwd()
+pdf(paste0(wd, "/figures/directionality_map.pdf"), height = 8, width = 16)
+pushViewport(viewport(layout = grid.layout(nrow = 1, ncol = 2)))
+print(one_route, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(tf_route, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
+print(one_legend, vp = vp_one)
+print(tf_legend, vp = vp_tf)
+dev.off()
+
+#### High leverage species ####
 
 # Directionality values at 25 route scales
 # Regional high leverage species
@@ -1146,83 +1088,6 @@ spp_cor <- regional_abund_trends %>%
   slice(1:10) %>%
   select(aou, n_regions, abund_dir_r, english_common_name)
 # write.csv(spp_cor, "data/high_leverage_spp.csv", row.names = F)
-
-# Compare correlations of directionality with habitat, trophic guild abund trends
-
-foraging_cor <- regional_abund_trends %>%
-  left_join(bird_traits, by = c("aou" = "AOU")) %>%
-  filter(!is.na(Foraging)) %>%
-  group_by(Foraging) %>%
-  nest() %>%
-  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
-         abund_dir_r = map_dbl(cor_test, ~.$estimate),
-         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
-         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
-  select(-data)
-
-trophic_cor <- regional_abund_trends %>%
-  left_join(bird_traits, by = c("aou" = "AOU")) %>%
-  filter(!is.na(Trophic.Group)) %>%
-  group_by(Trophic.Group) %>%
-  nest() %>%
-  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
-         abund_dir_r = map_dbl(cor_test, ~.$estimate),
-         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
-         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
-  select(-data)  
-
-mig_cor <- regional_abund_trends %>%
-  left_join(bird_traits, by = c("aou" = "AOU")) %>%
-  filter(!is.na(migclass)) %>%
-  group_by(migclass) %>%
-  nest() %>%
-  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
-         abund_dir_r = map_dbl(cor_test, ~.$estimate),
-         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
-         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
-  select(-data)
-
-habitat_cor <- regional_abund_trends %>%
-  left_join(habitat_guilds) %>%
-  filter(!is.na(nesting_group)) %>%
-  group_by(nesting_group) %>%
-  nest() %>%
-  mutate(cor_test = map(data, ~cor.test(.$dir_core, .$abund_trend)),
-         abund_dir_r = map_dbl(cor_test, ~.$estimate),
-         conf_low = map_dbl(cor_test, ~.$conf.int[[1]]),
-         conf_hi = map_dbl(cor_test, ~.$conf.int[[2]])) %>%
-  select(-data)
-
-foraging_plot <- ggplot(foraging_cor, aes(x = Foraging, y = abund_dir_r)) +
-  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
-  labs(x = "Foraging guild", y = " ") +
-  geom_point(cex = 2) + 
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) +
-  coord_flip() 
-
-trophic_plot <- ggplot(trophic_cor, aes(x = Trophic.Group, y = abund_dir_r)) +
-  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
-  labs(x = "Trophic Group", y = " ") +
-  geom_point(cex = 2) + 
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) + 
-  coord_flip() 
-
-mig_plot <- ggplot(mig_cor, aes(x = migclass, y = abund_dir_r)) +
-  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
-  labs(x = "Migration distance", y = "") +
-  geom_point(cex = 2) + 
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) +
-  coord_flip() 
-
-hab_plot <- ggplot(habitat_cor, aes(x = nesting_group, y = abund_dir_r)) +
-  geom_hline(yintercept = 0, cex = 1, col = "red", lty = 2) +
-  labs(x = "Nesting habitat", y = "Correlation with directionality") +
-  geom_point(cex = 2) + 
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_hi), width = 0) +
-  coord_flip() 
-
-plot_grid(foraging_plot, trophic_plot, mig_plot, hab_plot, ncol = 1)
-ggsave("figures/guild_cor_directionality.pdf", units = "in", height = 10, width = 6)
 
 # High leverage species with leave-one-out calculations of directionality (@25 route scales)
 
@@ -1345,7 +1210,7 @@ top_ten <- high_impact_spp %>%
   slice(1:10)
 
 spp_dir_diffs_map <- spp_dir_diffs %>%
-  mutate(SPEC_10 = case_when(aou %in% top_ten$aou ~ SPEC,
+  mutate(plot_spp = case_when(aou %in% top_ten$aou ~ COMMONNAME,
                              TRUE ~ "Other")) %>%
   left_join(routes, by = c("focal_rte" = "stateroute")) %>%
   mutate(sign = case_when(SPEC %in% c("CLSW", "EUCD") ~ "POS",
@@ -1354,15 +1219,18 @@ spp_dir_diffs_map <- spp_dir_diffs %>%
                           TRUE ~ "NEG")) %>%
   st_as_sf(coords = c("longitude", "latitude"))
 
+spp_dir_diffs_map$spp_fct <- fct_relevel(as.factor(spp_dir_diffs_map$plot_spp),
+                                         "Other", after = Inf)
+
 spp_signs <- spp_dir_diffs_map %>%
   ungroup() %>%
   dplyr::select(sign) %>%
   filter(sign == "POS")
 
 hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(spp_dir_diffs_map) + tm_bubbles(col = "SPEC_10", size = "dir_diff", title.col = "SPEC", title.size = "Change in dir.") +
+  tm_shape(spp_dir_diffs_map) + tm_bubbles(col = "spp_fct", size = "dir_diff", title.col = "Species", title.size = expression(Delta~Directionality)) +
   tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
-  tm_layout(legend.position=c("right", "bottom"))
+  tm_layout(legend.position=c(0.82, 0.02))
 tmap_save(hi_lev_spp, "figures/spec-LOO-dir_map.pdf")
 
 # To what degree is one species dominant in driving directionality - how many species w/in 15% of max dir_diff value
@@ -1392,11 +1260,16 @@ nrow(filter(n_regions_tied, n_spp > 1))/nrow(n_regions_tied)
 
 max(n_regions_tied$n_spp)
 
-# Leave-one-out directionality for species guilds
+### Leave-one-out directionality species guilds ####
 
 guild_core_spp <- core_spp %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
-  left_join(habitat_guilds)
+  left_join(dplyr::select(habitat_guilds, species, sci_name, Breeding.Biome), by = c("CommonName" = "species"))
+
+guild_list <- guild_core_spp %>%
+  ungroup() %>%
+  dplyr::select(aou, Breeding.Biome, migclass, Foraging, Trophic.Group) %>%
+  distinct()
 
 guild_excl_dirs <- regional_rtes %>%
   group_by(focal_rte) %>%
@@ -1406,7 +1279,7 @@ guild_excl_dirs <- regional_rtes %>%
     guild_core_spp %>%
       filter(stateroute %in% df$stateroute) %>%
       ungroup() %>%
-      distinct(aou, Foraging, Trophic.Group, migclass, nesting_group)
+      distinct(aou, Foraging, Trophic.Group, migclass, Breeding.Biome)
   }),
   n_spp = map_dbl(spp_list, ~nrow(.))) %>%
   filter(n_spp > 0) %>%
@@ -1516,13 +1389,13 @@ guild_excl_dirs <- regional_rtes %>%
     r <- .x
     spp <- .y
     
-    nesting <- unique(spp$nesting_group)
+    nesting <- unique(spp$Breeding.Biome)
     
-    res <- data.frame(nesting_group = nesting, excl_dir = NA)
+    res <- data.frame(Breeding.Biome = nesting, excl_dir = NA)
     
     for(sp in nesting) {
       spec <- spp %>%
-        filter(nesting_group == sp)
+        filter(Breeding.Biome == sp)
       
       log_core <- log_abund_core %>%
         filter(stateroute %in% r$stateroute) %>%
@@ -1535,319 +1408,117 @@ guild_excl_dirs <- regional_rtes %>%
         abund_dist_core <- dist(log_core[, -1])
         dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
         
-        res$excl_dir[res$nesting_group == sp] <- dir_core
+        res$excl_dir[res$Breeding.Biome == sp] <- dir_core
       }
       
       else {
-        res$excl_dir[res$nesting_group == sp] <- NA
+        res$excl_dir[res$Breeding.Biome == sp] <- NA
       }
     }
     
     res
     
   }))
+
+forage_over5 <- guild_list %>%
+  group_by(Foraging) %>%
+  summarize(n_spp = n_distinct(aou)) %>%
+  filter(n_spp > 5)
 
 forage_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, forage_dir) %>%
   unnest(forage_dir) %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
-  filter(!is.na(Foraging)) 
+  filter(!is.na(Foraging), Foraging %in% forage_over5$Foraging) %>%
+  left_join(forage_over5) %>%
+  mutate(forage_plot = paste0(str_to_title(Foraging), " (", n_spp, ")"))
 # write.csv(forage_dir_diffs, "data/guild_LOO_dir_impact_foraging.csv", row.names = F)
 forage_dir_diffs <- read.csv("data/guild_LOO_dir_impact_foraging.csv", stringsAsFactors = F)
+
+trophic_over5 <- guild_list %>%
+  group_by(Trophic.Group) %>%
+  summarize(n_spp = n_distinct(aou)) %>%
+  filter(n_spp > 5)
 
 trophic_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, trophic_dir) %>%
   unnest(trophic_dir) %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
-  filter(!is.na(Trophic.Group)) 
+  filter(!is.na(Trophic.Group), Trophic.Group %in% trophic_over5$Trophic.Group) %>%
+  left_join(trophic_over5) %>%
+  mutate_at(c("Trophic.Group"), ~ifelse(. == "insct/om", "insect/omnivore", .)) %>%
+  mutate(trophic_plot = paste0(str_to_title(Trophic.Group), " (", n_spp, ")"))
 # write.csv(trophic_dir_diffs, "data/guild_LOO_dir_impact_trophic.csv", row.names = F)
 trophic_dir_diffs <- read.csv("data/guild_LOO_dir_impact_trophic.csv", stringsAsFactors = F)
+
+mig_over5 <- guild_list %>%
+  group_by(migclass) %>%
+  summarize(n_spp = n_distinct(aou)) %>%
+  filter(n_spp > 5)
 
 mig_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, mig_dir) %>%
   unnest(mig_dir) %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
-  filter(!is.na(migclass)) 
+  filter(!is.na(migclass)) %>%
+  left_join(mig_over5) %>%
+  mutate_at(c("migclass"), ~case_when(. == "short" ~ "short distance",
+                                      . == "resid" ~ "resident",
+                                      . == "neotrop" ~ "long distance")) %>%
+  mutate(mig_plot = paste0(str_to_title(migclass), " (", n_spp, ")"))
 # write.csv(mig_dir_diffs, "data/guild_LOO_dir_impact_migclass.csv", row.names = F)
 mig_dir_diffs <- read.csv("data/guild_LOO_dir_impact_migclass.csv", stringsAsFactors = F)
+
+hab_over5 <- guild_list %>%
+  group_by(Breeding.Biome) %>%
+  summarize(n_spp = n_distinct(aou)) %>%
+  filter(n_spp > 5)
 
 hab_dir_diffs <- guild_excl_dirs %>%
   select(focal_rte, nesting_dir) %>%
   unnest(nesting_dir) %>%
   left_join(regional_dir_core) %>%
   mutate(dir_diff = dir_core - excl_dir) %>%
-  filter(!is.na(nesting_group)) 
+  filter(!is.na(Breeding.Biome), Breeding.Biome %in% hab_over5$Breeding.Biome) %>%
+  left_join(hab_over5) %>%
+  mutate(hab_plot = paste0(str_to_title(Breeding.Biome), " (", n_spp, ")"))
 # write.csv(hab_dir_diffs, "data/guild_LOO_dir_impact_habitat.csv", row.names = F)
+hab_dir_diffs <- read.csv("data/guild_LOO_dir_impact_habitat.csv", stringsAsFactors = F)
 
-foraging_plot <- ggplot(forage_dir_diffs, aes(x = Foraging, y = dir_diff)) +
+foraging_plot <- ggplot(forage_dir_diffs, aes(x = forage_plot, y = dir_diff)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Foraging guild", y = "Directionality impact") +
+  annotate("segment", x = 2, xend = 2,  y = 0.06, yend = 0.08, arrow = arrow(), size = 2, col = "firebrick") +
+  annotate("text", 1, 0.075, label = "Higher directionality\nincluding group", size = 4.5, col = "firebrick") +
+  labs(x = "Foraging guild", y = "") +
   coord_flip() 
 
-trophic_plot <- ggplot(trophic_dir_diffs, aes(x = Trophic.Group, y = dir_diff)) +
+trophic_plot <- ggplot(trophic_dir_diffs, aes(x = trophic_plot, y = dir_diff)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Trophic Group", y = "Directionality impact") +
+  annotate("segment", x = 2, xend = 2,  y = -0.04, yend = -0.06, arrow = arrow(), size = 2, col = "dodgerblue") +
+  annotate("text", 1, -0.05, label = "Higher directionality\nexcluding group", size = 4.5, col = "dodgerblue") +
+  labs(x = "Trophic group", y = "") +
   coord_flip() 
 
-mig_plot <- ggplot(mig_dir_diffs, aes(x = migclass, y = dir_diff)) +
+mig_plot <- ggplot(mig_dir_diffs, aes(x = mig_plot, y = dir_diff)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Migration distance", y = "Directionality impact") +
   coord_flip() 
 
-hab_plot <- ggplot(hab_dir_diffs, aes(x = nesting_group, y = dir_diff)) +
+hab_plot <- ggplot(hab_dir_diffs, aes(x = hab_plot, y = dir_diff)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Nesting habitat", y = "Directionality impact") +
+  labs(x = "Breeding biome", y = "Directionality impact") +
   coord_flip() 
 
-plot_grid(foraging_plot, trophic_plot, mig_plot, hab_plot, ncol = 1)
-ggsave("figures/guild_LOO_directionality.pdf", units = "in", height = 10, width = 6)
-
-### Maps: max delta guild for each route
-
-max_diff_guild_map <- function(df) {
-  legend_title <- colnames(df)[[2]]
-  max_sf <- df %>%
-    group_by(focal_rte) %>%
-    filter(dir_diff == max(dir_diff)) %>%
-    left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-    st_as_sf(coords = c("longitude", "latitude"))
-  
-  map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-    tm_shape(max_sf) + tm_bubbles(col = legend_title, size = "dir_diff", title.size = "Impact on directionality") +
-    tm_layout(legend.position=c("right", "bottom"))
-  tmap_save(map, paste0("figures/guild_LOO_map_", legend_title, ".pdf"))
-}
-
-max_diff_guild_map(mig_dir_diffs)
-max_diff_guild_map(forage_dir_diffs)
-max_diff_guild_map(hab_dir_diffs)
-max_diff_guild_map(trophic_dir_diffs)
-
-### Can max impact guild be attributed to high leverage species?
-
-# Highest impact species per focal_rte
-spp_dir_diffs
-hi_impact_spp <- unique(spp_dir_diffs$aou)
-
-# Remove high impact species from communities
-guild_core_spp <- core_spp %>%
-  left_join(bird_traits, by = c("aou" = "AOU")) %>%
-  left_join(habitat_guilds) %>%
-  filter(!(aou %in% spp_dir_diffs$aou))
-
-# Calculate guild LOO with high impact species excluded
-guild_excl_dirs <- regional_rtes %>%
-  group_by(focal_rte) %>%
-  nest() %>%
-  left_join(spp_dir_diffs) %>%
-  mutate(spp_list = map(data, ~{
-    df <- .
-    guild_core_spp %>%
-      filter(stateroute %in% df$stateroute) %>%
-      ungroup() %>%
-      distinct(aou, Foraging, Trophic.Group, migclass, nesting_group)
-  }),
-  n_spp = map_dbl(spp_list, ~nrow(.))) %>%
-  filter(n_spp > 0) %>%
-  mutate(forage_dir = map2(data, spp_list, ~{
-    r <- .x
-    spp <- .y
-    
-    foraging <- unique(spp$Foraging)
-    
-    res <- data.frame(Foraging = foraging, excl_dir = NA)
-    
-    for(sp in foraging) {
-      spec <- spp %>%
-        filter(Foraging == sp)
-      
-      log_core <- log_abund_core %>%
-        filter(stateroute %in% r$stateroute) %>%
-        select(-c(contains(as.character(hi_impact_spp)))) %>%
-        select(-c(contains(as.character(spec$aou)))) %>%
-        group_by(year_bin) %>%
-        summarize_all(mean, na.rm = T) %>%
-        dplyr::select(-stateroute)
-      
-      if(nrow(log_core) > 3) {
-        abund_dist_core <- dist(log_core[, -1])
-        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
-        
-        res$excl_dir[res$Foraging == sp] <- dir_core
-      }
-      
-      else {
-        res$excl_dir[res$Foraging == sp] <- NA
-      }
-    }
-    
-    res
-    
-  }),
-  trophic_dir = map2(data, spp_list, ~{
-    r <- .x
-    spp <- .y
-    
-    trophic <- unique(spp$Trophic.Group)
-    
-    res <- data.frame(Trophic.Group = trophic, excl_dir = NA)
-    
-    for(sp in trophic) {
-      spec <- spp %>%
-        filter(Trophic.Group == sp)
-      
-      log_core <- log_abund_core %>%
-        filter(stateroute %in% r$stateroute) %>%
-        select(-c(contains(as.character(hi_impact_spp)))) %>%
-        select(-c(contains(as.character(spec$aou)))) %>%
-        group_by(year_bin) %>%
-        summarize_all(mean, na.rm = T) %>%
-        dplyr::select(-stateroute)
-      
-      if(nrow(log_core) > 3) {
-        abund_dist_core <- dist(log_core[, -1])
-        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
-        
-        res$excl_dir[res$Trophic.Group == sp] <- dir_core
-      }
-      
-      else {
-        res$excl_dir[res$Trophic.Group == sp] <- NA
-      }
-    }
-    
-    res
-    
-  }),
-  mig_dir = map2(data, spp_list, ~{
-    r <- .x
-    spp <- .y
-    
-    migclass <- unique(spp$migclass)
-    
-    res <- data.frame(migclass = migclass, excl_dir = NA)
-    
-    for(sp in migclass) {
-      spec <- spp %>%
-        filter(migclass == sp)
-      
-      log_core <- log_abund_core %>%
-        filter(stateroute %in% r$stateroute) %>%
-        select(-c(contains(as.character(hi_impact_spp)))) %>%
-        select(-c(contains(as.character(spec$aou)))) %>%
-        group_by(year_bin) %>%
-        summarize_all(mean, na.rm = T) %>%
-        dplyr::select(-stateroute)
-      
-      if(nrow(log_core) > 3) {
-        abund_dist_core <- dist(log_core[, -1])
-        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
-        
-        res$excl_dir[res$migclass == sp] <- dir_core
-      }
-      
-      else {
-        res$excl_dir[res$migclass == sp] <- NA
-      }
-    }
-    
-    res
-    
-  }),
-  nesting_dir = map2(data, spp_list, ~{
-    r <- .x
-    spp <- .y
-    
-    nesting <- unique(spp$nesting_group)
-    
-    res <- data.frame(nesting_group = nesting, excl_dir = NA)
-    
-    for(sp in nesting) {
-      spec <- spp %>%
-        filter(nesting_group == sp)
-      
-      log_core <- log_abund_core %>%
-        filter(stateroute %in% r$stateroute) %>%
-        select(-c(contains(as.character(hi_impact_spp)))) %>%
-        select(-c(contains(as.character(spec$aou)))) %>%
-        group_by(year_bin) %>%
-        summarize_all(mean, na.rm = T) %>%
-        dplyr::select(-stateroute)
-      
-      if(nrow(log_core) > 3) {
-        abund_dist_core <- dist(log_core[, -1])
-        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
-        
-        res$excl_dir[res$nesting_group == sp] <- dir_core
-      }
-      
-      else {
-        res$excl_dir[res$nesting_group == sp] <- NA
-      }
-    }
-    
-    res
-    
-  }))
-
-
-forage_dir_diffs <- guild_excl_dirs %>%
-  rename(spp_excl_dir = "excl_dir") %>%
-  select(focal_rte, spp_excl_dir, forage_dir) %>%
-  unnest(forage_dir) %>%
-  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
-  filter(!is.na(Foraging)) 
-write.csv(forage_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_foraging.csv", row.names = F)
-
-trophic_dir_diffs <- guild_excl_dirs %>%
-  rename(spp_excl_dir = "excl_dir") %>%
-  select(focal_rte, spp_excl_dir, trophic_dir) %>%
-  unnest(trophic_dir) %>%
-  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
-  filter(!is.na(Trophic.Group)) 
-write.csv(trophic_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_trophic.csv", row.names = F)
-
-mig_dir_diffs <- guild_excl_dirs %>%
-  rename(spp_excl_dir = "excl_dir") %>%
-  select(focal_rte, spp_excl_dir, mig_dir) %>%
-  unnest(mig_dir) %>%
-  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
-  filter(!is.na(migclass)) 
-write.csv(mig_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_migclass.csv", row.names = F)
-
-hab_dir_diffs <- guild_excl_dirs %>%
-  rename(spp_excl_dir = "excl_dir") %>%
-  select(focal_rte, spp_excl_dir, nesting_dir) %>%
-  unnest(nesting_dir) %>%
-  mutate(dir_diff = spp_excl_dir - excl_dir) %>%
-  filter(!is.na(nesting_group)) 
-write.csv(hab_dir_diffs, "data/guild_LOO_noHIspp_dir_impact_habitat.csv", row.names = F)
-
-max_diff_guild_map_exclHIspp <- function(df) {
-  legend_title <- colnames(df)[[3]]
-  max_sf <- df %>%
-    group_by(focal_rte) %>%
-    filter(dir_diff == max(dir_diff)) %>%
-    left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-    st_as_sf(coords = c("longitude", "latitude"))
-  
-  map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-    tm_shape(max_sf) + tm_bubbles(col = legend_title, size = "dir_diff", title.size = "Impact on directionality") +
-    tm_layout(legend.position=c("right", "bottom"))
-  tmap_save(map, paste0("figures/guild_LOO_noHIspp_map_", legend_title, ".pdf"))
-}
-
-max_diff_guild_map_exclHIspp(mig_dir_diffs)
-max_diff_guild_map_exclHIspp(forage_dir_diffs)
-max_diff_guild_map_exclHIspp(hab_dir_diffs)
-max_diff_guild_map_exclHIspp(trophic_dir_diffs)
+plot_grid(trophic_plot, foraging_plot, mig_plot, hab_plot, ncol = 2, 
+          labels = c("A", "B", "C", "D"), label_size = 16)
+ggsave("figures/guild_LOO_directionality.pdf", units = "in", height = 8, width = 12)
 
 #### Route env change figures ####
 
@@ -1874,27 +1545,26 @@ tmap_save(climate_map, "figures/regional_climate_trends_map.pdf", units = "in", 
 
 lc_1route <- scale_model_variables_unnest %>%
   filter(scale == 1) %>%
-  filter(!is.na(max_lc_class)) %>%
+  filter(!is.na(max_lc_class), max_lc_class != "Water") %>%
   left_join(routes, by = c("focal_rte" = "stateroute")) %>%
   st_as_sf(coords = c("longitude", "latitude")) %>%
   st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
 
-lc_posneg <- scale_model_variables_unnest %>%
-  filter(scale == 1) %>%
-  filter(!is.na(max_lc_class)) %>%
-  mutate(sign = case_when(max_lc > 0 ~ "Increase",
-                          TRUE ~ "Decrease"))
-
-theme_set(theme_classic(base_size = 17))
-class_change <- ggplot(lc_posneg, aes(x = max_lc_class, fill = sign)) + geom_bar() + labs(x = "", y = "BBS Routes", fill = "") + 
-  scale_fill_manual(values = c("Increase" = "#EF8A62", "Decrease" ="#92C5DE")) + theme(legend.position = c(0.9, 0.9)) +
-  coord_flip()
+theme_set(theme_classic(base_size = 20))
+class_change <- ggplot(lc_1route, aes(x = max_lc_class, y = max_lc, fill = max_lc_class)) + 
+  geom_violin(draw_quantiles = c(0.5)) + 
+  geom_hline(yintercept = 0, lty = 2) +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Set3") +
+  labs(x = "", y = "Change in proportion cover", fill = "", title = "B") + 
+  coord_flip() +
+  theme(plot.title = element_text(size = 18, hjust = -0.25), 
+        plot.margin = unit(c(1.25, 0, 0, 0), "cm"))
 
 lc_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
-  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
-# tmap_save(lc_map, "figures/max_landcover_map.pdf", units = "in", height = 6, width = 8)
+  tm_layout(main.title = "A", title.size = 4, legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 
 color_scale <- data.frame(color = c(1:4), 
                           temp_hex = c("#92C5DE", "#FDDBC7", "#EF8A62", "#B2182B"), stringsAsFactors = F)
@@ -1902,15 +1572,18 @@ color_scale <- data.frame(color = c(1:4),
 tmin_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "trend_tmin", size = 0.5, title = "Trend in Tmin", breaks = quantile(lc_1route$trend_tmin, na.rm = T), palette = color_scale$temp_hex) + 
-  tm_layout(legend.show = F, outer.margins = c(0.01,0.01,0.01,0.01))
-  #  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+  tm_layout(main.title = "C", title.size = 4, legend.show = F, 
+            inner.margins = c(0.12, 0.02, 0.02, 0.02), 
+            outer.margins = c(0.01,0.01,0.01,0.01))
+
 
 tmax_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "trend_tmax", size = 0.5, title = "Trend in Tmax", 
           breaks = quantile(lc_1route$trend_tmax, na.rm = T), palette = color_scale$temp_hex) + 
-  tm_layout(legend.show = F, outer.margins = c(0.01,0.01,0.01,0.01))
-#  tm_layout(legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+  tm_layout(main.title = "D", title.size = 4, legend.show = F, 
+            inner.margins = c(0.12, 0.02, 0.02, 0.02), 
+            outer.margins = c(0.01,0.01,0.01,0.01))
 
 tmin_quant <- quantile(lc_1route$trend_tmin, na.rm = T)
 tmax_quant <- quantile(lc_1route$trend_tmax, na.rm = T)
@@ -1944,8 +1617,9 @@ tmin_hist <- ggplot(lc_1route_plots, aes(x = trend_tmin, fill = as.factor(tmin_c
   labs(x = "Trend in Tmin", y = "Count") +
   scale_y_continuous(breaks = c(0, 50, 100)) +
   scale_fill_manual(values = color_scale$temp_hex) +
-  theme(text = element_text(size = 12), axis.text = element_text(size = 10),
-        axis.title = element_text(size = 13),
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 15),
+        axis.title.y = element_text(margin = margin(r = 0)),
         legend.position = "none") +
   theme(
     panel.background = element_rect(fill = "transparent"), # bg of the panel
@@ -1957,17 +1631,19 @@ tmax_hist <- ggplot(lc_1route_plots, aes(x = trend_tmax, fill = as.factor(tmax_c
   geom_vline(aes(xintercept = 0), lty = 2) +
   labs(x = "Trend in Tmax", y = "Count") +
   scale_y_continuous(breaks = c(0, 50, 100)) +
+  scale_x_continuous(breaks = c(-0.05, 0, 0.05, 0.1)) +
   scale_fill_manual(values = color_scale$temp_hex) +
-  theme(text = element_text(size = 12), axis.text = element_text(size = 10),
-        axis.title = element_text(size = 13),
+  theme(axis.text = element_text(size = 14),
+        axis.title = element_text(size = 15),
+        axis.title.y = element_text(margin = margin(r = 0)),
         legend.position = "none") +
   theme(
     panel.background = element_rect(fill = "transparent"), # bg of the panel
     plot.background = element_rect(fill = "transparent", color = NA) # bg of the plot
   )
 
-vp_tmin <- viewport(0.42, 0.12, width = 0.16, height = 0.15)
-vp_tmax <- viewport(0.92, 0.12, width = 0.16, height = 0.15)
+vp_tmin <- viewport(0.095, 0.09, width = 0.19, height = 0.15)
+vp_tmax <- viewport(0.595, 0.09, width = 0.19, height = 0.15)
 
 grid.newpage()
 pdf(paste0(getwd(), "/figures/max_landcover_multipanel.pdf"), height = 12, width = 15)
@@ -1979,781 +1655,3 @@ print(tmax_map, vp = viewport(layout.pos.row = 2, layout.pos.col = 2))
 print(tmin_hist, vp = vp_tmin)
 print(tmax_hist, vp = vp_tmax)
 dev.off()
-
-
-##### Community weighted means ######
-
-# Long format log abund data
-
-# All species
-log_abund_long <- bbs_subset %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  mutate(y1 = case_when(countrynum == 124 ~ 1990,
-                        countrynum == 840 ~ 1992),
-         y2 = case_when(countrynum == 124 ~ 2010,
-                        countrynum == 840 ~ 2016),
-         max_bins = case_when(countrynum == 124 ~ 5,
-                              countrynum == 840 ~ 6)) %>%
-  filter(year >= y1, year <= y2) %>%
-  group_by(countrynum) %>%
-  nest() %>%
-  mutate(year_bins = map2(countrynum, data, ~{
-    country <- .x
-    df <- .y
-    
-    if(country == 124) {
-      df %>%
-        mutate(year_bin = case_when(year >= 1990 & year <= 1993 ~ 1990,
-                                    year >= 1994 & year <= 1997 ~ 1994,
-                                    year >= 1998 & year <= 2001 ~ 1998,
-                                    year >= 2002 & year <= 2005 ~ 2002,
-                                    TRUE ~ 2006))
-    } else {
-      df %>%
-        mutate(year_bin = case_when(year >= 1992 & year <= 1995 ~ 1992,
-                                    year >= 1996 & year <= 1999 ~ 1996,
-                                    year >= 2000 & year <= 2003 ~ 2000,
-                                    year >= 2004 & year <= 2007 ~ 2004,
-                                    year >= 2008 & year <= 2011 ~ 2008,
-                                    year >= 2012 & year <= 2016 ~ 2012))
-    }
-  })) %>%
-  dplyr::select(-data) %>%
-  unnest(cols = c(year_bins)) %>%
-  group_by(stateroute, aou, year_bin) %>%
-  summarize(mean_abund = mean(speciestotal)) %>%
-  dplyr::select(stateroute, aou, year_bin, mean_abund)
-
-# Excluding transient species
-log_abund_core_long <- bbs_subset %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  mutate(y1 = case_when(countrynum == 124 ~ 1990,
-                        countrynum == 840 ~ 1992),
-         y2 = case_when(countrynum == 124 ~ 2010,
-                        countrynum == 840 ~ 2016),
-         max_bins = case_when(countrynum == 124 ~ 5,
-                              countrynum == 840 ~ 6)) %>%
-  filter(year >= y1, year <= y2) %>%
-  group_by(countrynum) %>%
-  nest() %>%
-  mutate(year_bins = map2(countrynum, data, ~{
-    country <- .x
-    df <- .y
-    
-    if(country == 124) {
-      df %>%
-        mutate(year_bin = case_when(year >= 1990 & year <= 1993 ~ 1990,
-                                    year >= 1994 & year <= 1997 ~ 1994,
-                                    year >= 1998 & year <= 2001 ~ 1998,
-                                    year >= 2002 & year <= 2005 ~ 2002,
-                                    TRUE ~ 2006))
-    } else {
-      df %>%
-        mutate(year_bin = case_when(year >= 1992 & year <= 1995 ~ 1992,
-                                    year >= 1996 & year <= 1999 ~ 1996,
-                                    year >= 2000 & year <= 2003 ~ 2000,
-                                    year >= 2004 & year <= 2007 ~ 2004,
-                                    year >= 2008 & year <= 2011 ~ 2008,
-                                    year >= 2012 & year <= 2016 ~ 2012))
-    }
-  })) %>%
-  dplyr::select(-data) %>%
-  unnest(cols = c(year_bins)) %>%
-  group_by(stateroute, aou, year_bin) %>%
-  summarize(n_years = n_distinct(year),
-            mean_abund = mean(speciestotal)) %>%
-  filter(n_years > 1) %>%
-  dplyr::select(stateroute, aou, year_bin, mean_abund)
-
-# Trait data
-bbs_aou_temp_range <- read.csv("data/bbs_aou_temp_range.csv", stringsAsFactors = F)
-forest_range <- read.csv("data/spp_forest_traits.csv", stringsAsFactors = F)
-body_size <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFactors = F) %>%
-  dplyr::select(AOU, Mass.g., logMass)
-
-cwm_traits <- bbs_aou_temp_range %>%
-  left_join(forest_range) %>%
-  left_join(body_size, by = c("aou" = "AOU")) %>%
-  na.omit()
-
-# CWM trait correlations
-
-cwm_traits_plot <- cwm_traits %>%
-  left_join(fourletter_codes)
-
-cor(cwm_traits_plot[, c(2:4, 9)])
-
-ggplot(cwm_traits_plot, aes(x = temp_mean, y = temp_range)) + geom_text(aes(label = SPEC)) +
-  labs(x = "Mean temperature", y = "Temperature range")
-ggsave("figures/temp_traits_spp.pdf", units = "in", height = 6, width = 8)
-
-ggplot(cwm_traits_plot, aes(x = propFor, y = for_range)) + geom_text(aes(label = SPEC)) +
-  labs(x = "Mean forest", y = "Forest range")
-ggsave("figures/hab_traits_spp.pdf", units = "in", height = 6, width = 8)
-
-# Climate trends
-env_vars <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
-
-# Takes a long time ~40 minutes
-cwm_input <- bbs_subset %>%
-  ungroup() %>%
-  distinct(stateroute, bcr) %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  dplyr::select(stateroute) %>%
-  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,3,21))))) %>%
-  unnest(cols = c(scale)) %>%
-  mutate(model_input = map2(stateroute, scale, ~{
-    bbs_route_distances %>%
-      filter(focal_rte == .x) %>%
-      arrange(distance) %>%
-      slice(1:.y)
-  }),
-  input_vars = purrr::map(model_input, ~{
-    df <- .
-    
-    cwm_all <- log_abund_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      mutate(wtd_temp_range = mean_abund*temp_range,
-             wtd_temp_mean = mean_abund*temp_mean,
-             wtd_for_range = mean_abund*for_range,
-             wtd_for_mean = mean_abund*propFor,
-             wtd_logmass = mean_abund*logMass) %>%
-      group_by(year_bin) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
-      mutate(spp = "all",
-             focal_rte = unique(df$focal_rte))
-    
-    cwm_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      mutate(wtd_temp_range = mean_abund*temp_range,
-             wtd_temp_mean = mean_abund*temp_mean,
-             wtd_for_range = mean_abund*for_range,
-             wtd_for_mean = mean_abund*propFor,
-             wtd_logmass = mean_abund*logMass) %>%
-      group_by(year_bin) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T)) %>%
-      mutate(spp = "no transients",
-             focal_rte = unique(df$focal_rte))
-    
-    rbind(cwm_all, cwm_core)
-    
-  }))
-
-cwm_unnest <- cwm_input %>%
-  dplyr::select(-model_input) %>%
-  unnest(cols = c(input_vars))
-
-# write.csv(cwm_unnest, "data/cwm_traits_all_scales.csv", row.names = F)
-cwm_unnest <- read.csv("data/cwm_traits_all_scales.csv", stringsAsFactors = F)
-
-## CWM linear models
-
-cwm_temp_plots <- cwm_unnest %>%
-  filter(scale == 21, spp == "no transients") %>%
-  group_by(focal_rte) %>%
-  nest() %>%
-  mutate(range_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_temp_range ~ year_bin, data = df))
-  }),
-  mean_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
-  }),
-  body_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_logmass ~ year_bin, data = df))
-  })) %>%
-  dplyr::select(-data) %>%
-  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
-  unnest(cols = c("table")) %>%
-  filter(term == "year_bin")
-
-temp_plots <- ggplot(filter(cwm_temp_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-  labs(x = "", y = "Change over time", title = "Regional") +
-  scale_x_discrete(labels = c("mean_mod" = "Temperature mean", "range_mod" = "Temperature range")) +
-  geom_hline(yintercept = 0, lty = 2, cex = 1)
-
-
-body_plot <- ggplot(filter(cwm_temp_plots, model %in% c("body_mod")), aes(x = model, y = estimate)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-  labs(x = "", y = "Change over time", title = "Regional") +
-  scale_x_discrete(labels = c("body_mod" = "Log(body size (g))")) +
-  geom_hline(yintercept = 0, lty = 2, cex = 1)
-
-cwm_hab_plots <- cwm_unnest %>%
-  filter(scale == 2, spp == "no transients") %>%
-  group_by(focal_rte) %>%
-  nest() %>%
-  mutate(range_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_for_range ~ year_bin, data = df))
-  }),
-  mean_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_for_mean ~ year_bin, data = df))
-  })) %>%
-  dplyr::select(-data) %>%
-  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
-  unnest(cols = c("table")) %>%
-  filter(term == "year_bin")
-
-for_plots <- ggplot(filter(cwm_hab_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-  labs(x = "", y = "Change over time", title = "Local") +
-  scale_x_discrete(labels = c("mean_mod" = "% Forest mean", "range_mod" = "% Forest range")) +
-  geom_hline(yintercept = 0, lty = 2, cex = 1)
-
-plot_grid(temp_plots, body_plot, for_plots, ncol = 2)
-# ggsave("figures/cwms_breadth_position.pdf", units = "in", height = 10, width = 10)
-
-plot_grid(foraging_plot, trophic_plot, mig_plot, temp_plots, body_plot, for_plots, ncol = 3, nrow = 2,
-          labels = c("A", "B", "C", "D", "E", "F"), label_size = 17)
-ggsave("figures/guild_niche_impacts.pdf", units = "in", height = 10, width = 15)
-
-# Maps of CWMs
-
-cwm_temp_shape <- cwm_temp_plots %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  st_as_sf(coords = c("longitude", "latitude"))
-
-cwm_hab_shape <- cwm_hab_plots %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  st_as_sf(coords = c("longitude", "latitude"))
-
-temp_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_temp_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp range")
-
-temp_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_temp_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp mean")
-
-body_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_temp_shape, model == "body_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Body size")
-
-regional_maps <- tmap_arrange(temp_mean_map, temp_range_map, body_map, nrow = 2)
-tmap_save(regional_maps, "figures/cwms_regional_scale.pdf", units = "in", height = 10, width = 10)
-
-hab_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_hab_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest range")
-
-hab_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_hab_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest mean")
-
-local_maps <- tmap_arrange(hab_mean_map, hab_range_map, nrow = 1)
-tmap_save(local_maps, "figures/cwms_local_scale.pdf", units = "in", height = 5, width = 10)
-
-
-## CMs - no abundance weighting
-
-cm_input <- bbs_subset %>%
-  ungroup() %>%
-  distinct(stateroute, bcr) %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  dplyr::select(stateroute) %>%
-  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
-  unnest(cols = c(scale)) %>%
-  mutate(model_input = map2(stateroute, scale, ~{
-    bbs_route_distances %>%
-      filter(focal_rte == .x) %>%
-      arrange(distance) %>%
-      slice(1:.y)
-  }),
-  input_vars = purrr::map(model_input, ~{
-    df <- .
-    
-    cwm_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      group_by(year_bin) %>%
-      summarize(cwm_temp_range = mean(temp_range, na.rm = T),
-                cwm_temp_mean = mean(temp_mean, na.rm = T),
-                cwm_for_range = mean(for_range, na.rm = T),
-                cwm_for_mean = mean(propFor, na.rm = T),
-                cwm_logmass = mean(logMass, na.rm =T)) %>%
-      mutate(spp = "no transients",
-             focal_rte = unique(df$focal_rte))
-    
-    cwm_core
-    
-  }))
-
-cm_unnest <- cm_input %>%
-  dplyr::select(-model_input) %>%
-  unnest(cols = c(input_vars))
-# write.csv(cm_unnest, "data/community_means_noAbund.csv", row.names = F)
-
-## CM null models
-
-
-
-cm_temp_plots <- cm_unnest %>%
-  filter(scale == 21, spp == "no transients") %>%
-  group_by(focal_rte) %>%
-  nest() %>%
-  mutate(range_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_temp_range ~ year_bin, data = df))
-  }),
-  mean_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
-  }),
-  body_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_logmass ~ year_bin, data = df))
-  })) %>%
-  dplyr::select(-data) %>%
-  pivot_longer(range_mod:body_mod, names_to = "model", values_to = "table") %>%
-  unnest(cols = c("table")) %>%
-  filter(term == "year_bin")
-
-temp_plots <- ggplot(filter(cm_temp_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-  labs(x = "", y = "Change over time", title = "Regional") +
-  scale_x_discrete(labels = c("mean_mod" = "Temperature mean", "range_mod" = "Temperature range")) +
-  geom_hline(yintercept = 0, lty = 2, cex = 1)
-
-
-body_plot <- ggplot(filter(cm_temp_plots, model %in% c("body_mod")), aes(x = model, y = estimate)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-  labs(x = "", y = "Change over time", title = "Regional") +
-  scale_x_discrete(labels = c("body_mod" = "Log(body size (g))")) +
-  geom_hline(yintercept = 0, lty = 2, cex = 1)
-
-cm_hab_plots <- cm_unnest %>%
-  filter(scale == 2, spp == "no transients") %>%
-  group_by(focal_rte) %>%
-  nest() %>%
-  mutate(range_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_for_range ~ year_bin, data = df))
-  }),
-  mean_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_for_mean ~ year_bin, data = df))
-  })) %>%
-  dplyr::select(-data) %>%
-  pivot_longer(range_mod:mean_mod, names_to = "model", values_to = "table") %>%
-  unnest(cols = c("table")) %>%
-  filter(term == "year_bin")
-
-for_plots <- ggplot(filter(cm_hab_plots, model %in% c("mean_mod", "range_mod")), aes(x = model, y = estimate)) + 
-  geom_violin(trim = T, draw_quantiles = c(0.5), cex = 1, fill = "gray") +
-  labs(x = "", y = "Change over time", title = "Local") +
-  scale_x_discrete(labels = c("mean_mod" = "% Forest mean", "range_mod" = "% Forest range")) +
-  geom_hline(yintercept = 0, lty = 2, cex = 1)
-
-plot_grid(temp_plots, body_plot, for_plots, ncol = 2)
-# ggsave("figures/cms_noAbund_breadth_position.pdf", units = "in", height = 10, width = 10)
-
-# Maps of CMs - no abundance
-
-cm_temp_shape <- cm_temp_plots %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  st_as_sf(coords = c("longitude", "latitude"))
-
-cm_hab_shape <- cm_hab_plots %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  st_as_sf(coords = c("longitude", "latitude"))
-
-temp_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cm_temp_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp range")
-
-temp_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cm_temp_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Temp mean")
-
-body_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cm_temp_shape, model == "body_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Body size")
-
-regional_maps <- tmap_arrange(temp_mean_map, temp_range_map, body_map, nrow = 2)
-tmap_save(regional_maps, "figures/cms_noAbund_regional_scale.pdf", units = "in", height = 10, width = 10)
-
-hab_range_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cm_hab_shape, model == "range_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest range")
-
-hab_mean_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cm_hab_shape, model == "mean_mod")) + tm_dots(col = "estimate", size = 0.25, title = "Forest mean")
-
-local_maps <- tmap_arrange(hab_mean_map, hab_range_map, nrow = 1)
-tmap_save(local_maps, "figures/cms_noAbund_local_scale.pdf", units = "in", height = 5, width = 10)
-
-
-## Guild CWMs
-
-cwm_foraging_input <- bbs_subset %>%
-  ungroup() %>%
-  distinct(stateroute, bcr) %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  dplyr::select(stateroute) %>%
-  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
-  unnest(cols = c(scale)) %>%
-  mutate(model_input = map2(stateroute, scale, ~{
-    bbs_route_distances %>%
-      filter(focal_rte == .x) %>%
-      arrange(distance) %>%
-      slice(1:.y)
-  }),
-  input_vars = purrr::map(model_input, ~{
-    df <- .
-    
-    cwm_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      left_join(bird_traits, by = c("aou" = "AOU")) %>%
-      mutate(wtd_temp_range = mean_abund*temp_range,
-             wtd_temp_mean = mean_abund*temp_mean,
-             wtd_for_range = mean_abund*for_range,
-             wtd_for_mean = mean_abund*propFor,
-             wtd_logmass = mean_abund*logMass) %>%
-      group_by(year_bin, Foraging) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T),
-                abund = sum(mean_abund, na.rm = T)) %>%
-      mutate(spp = "no transients",
-             focal_rte = unique(df$focal_rte))
-    
-    cwm_core
-    
-  }))
-
-cwm_foraging_unnest <- cwm_foraging_input %>%
-  dplyr::select(-model_input) %>%
-  unnest(cols = c(input_vars)) %>%
-  mutate(trait_grp = "Foraging") %>%
-  rename("trait_val" = "Foraging")
-
-cwm_mig_input <- bbs_subset %>%
-  ungroup() %>%
-  distinct(stateroute, bcr) %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  dplyr::select(stateroute) %>%
-  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
-  unnest(cols = c(scale)) %>%
-  mutate(model_input = map2(stateroute, scale, ~{
-    bbs_route_distances %>%
-      filter(focal_rte == .x) %>%
-      arrange(distance) %>%
-      slice(1:.y)
-  }),
-  input_vars = purrr::map(model_input, ~{
-    df <- .
-    
-    cwm_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      left_join(bird_traits, by = c("aou" = "AOU")) %>%
-      mutate(wtd_temp_range = mean_abund*temp_range,
-             wtd_temp_mean = mean_abund*temp_mean,
-             wtd_for_range = mean_abund*for_range,
-             wtd_for_mean = mean_abund*propFor,
-             wtd_logmass = mean_abund*logMass) %>%
-      group_by(year_bin, migclass) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T),
-                abund = sum(mean_abund, na.rm = T)) %>%
-      mutate(spp = "no transients",
-             focal_rte = unique(df$focal_rte))
-    
-    cwm_core
-    
-  }))
-
-cwm_mig_unnest <- cwm_mig_input %>%
-  dplyr::select(-model_input) %>%
-  unnest(cols = c(input_vars)) %>%
-  mutate(trait_grp = "migclass") %>%
-  rename("trait_val" = "migclass")
-
-cwm_trophic_input <- bbs_subset %>%
-  ungroup() %>%
-  distinct(stateroute, bcr) %>%
-  filter(bcr %in% bcr_subset$bcr) %>%
-  dplyr::select(stateroute) %>%
-  mutate(scale = purrr::map(stateroute, ~data.frame(scale = rep(c(2,21))))) %>%
-  unnest(cols = c(scale)) %>%
-  mutate(model_input = map2(stateroute, scale, ~{
-    bbs_route_distances %>%
-      filter(focal_rte == .x) %>%
-      arrange(distance) %>%
-      slice(1:.y)
-  }),
-  input_vars = purrr::map(model_input, ~{
-    df <- .
-    
-    cwm_core <- log_abund_core_long %>%
-      filter(stateroute %in% df$stateroute) %>%
-      group_by(year_bin, aou) %>%
-      summarize_all(mean, na.rm = T) %>%
-      left_join(cwm_traits) %>%
-      left_join(bird_traits, by = c("aou" = "AOU")) %>%
-      mutate(wtd_temp_range = mean_abund*temp_range,
-             wtd_temp_mean = mean_abund*temp_mean,
-             wtd_for_range = mean_abund*for_range,
-             wtd_for_mean = mean_abund*propFor,
-             wtd_logmass = mean_abund*logMass) %>%
-      group_by(year_bin, Trophic.Group) %>%
-      summarize(cwm_temp_range = mean(wtd_temp_range, na.rm = T),
-                cwm_temp_mean = mean(wtd_temp_mean, na.rm = T),
-                cwm_for_range = mean(wtd_for_range, na.rm = T),
-                cwm_for_mean = mean(wtd_for_mean, na.rm = T),
-                cwm_logmass = mean(wtd_logmass, na.rm =T),
-                abund = sum(mean_abund, na.rm = T)) %>%
-      mutate(spp = "no transients",
-             focal_rte = unique(df$focal_rte))
-    
-    cwm_core
-    
-  }))
-
-cwm_trophic_unnest <- cwm_trophic_input %>%
-  dplyr::select(-model_input) %>%
-  unnest(cols = c(input_vars)) %>%
-  mutate(trait_grp = "Trophic.Group") %>%
-  rename("trait_val" = "Trophic.Group")
-
-cwm_guild_unnest <- bind_rows(cwm_foraging_unnest, cwm_mig_unnest, cwm_trophic_unnest)
-# write.csv(cwm_guild_unnest, "data/cwm_guild_data_unnest.csv", row.names = F)
-
-cwm_guild_temp_plots <- cwm_guild_unnest %>%
-  filter(scale == 21, spp == "no transients") %>%
-  group_by(focal_rte, trait_grp, trait_val) %>%
-  filter(!is.na(trait_val)) %>%
-  nest() %>%
-  mutate(n_bins = purrr::map_dbl(data, ~{nrow(.)})) %>%
-  filter(n_bins == 5 | n_bins == 6) %>%
-  mutate(range_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_temp_range ~ year_bin, data = df))
-  }),
-  mean_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_temp_mean ~ year_bin, data = df))
-  }),
-  body_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_logmass ~ year_bin, data = df))
-  }),
-  abund_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(abund ~ year_bin, data = df))
-  })) %>%
-  dplyr::select(-data) %>%
-  pivot_longer(range_mod:abund_mod, names_to = "model", values_to = "table") %>%
-  unnest(cols = c("table")) %>%
-  filter(term == "year_bin") %>%
-  group_by(trait_grp, trait_val) %>%
-  mutate(abund_trend = median(estimate[model == "abund_mod"]))
-
-guild_plot_labels <- data.frame(mod = c("mean_mod", "range_mod", "body_mod"), label = c("Mean temp", "Temp range", "Body size"))
-
-forage_n <- bird_traits %>%
-  group_by(Foraging) %>%
-  count() %>%
-  mutate(label = paste0(Foraging, " (", n, ")"))
-
-trophic_n <- bird_traits %>%
-  filter(Trophic.Group != "frugivore") %>%
-  group_by(Trophic.Group) %>%
-  count() %>%
-  mutate(label = paste0(Trophic.Group, " (", n, ")"))
-
-mig_n <- bird_traits %>%
-  group_by(migclass) %>%
-  count() %>%
-  mutate(label = paste0(migclass, " (", n, ")"))
-
-for(i in 1:3) {
-  mod <- guild_plot_labels$mod[i]
-  lab <- guild_plot_labels$label[i]
-  
-  forage_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5)) +
-    scale_fill_distiller(palette = "RdBu") +
-    scale_x_discrete(labels = forage_n$label) +
-    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2)
-  
-  trophic_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5)) +
-    scale_fill_distiller(palette = "RdBu") +
-   scale_x_discrete(labels = trophic_n$label) +
-    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2)
-  
-  mig_plot <- ggplot(filter(cwm_guild_temp_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5)) +
-    scale_fill_distiller(palette = "RdBu") +
-    scale_x_discrete(labels = mig_n$label) +
-    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2)
-  
-  plot_grid(forage_plot, trophic_plot, mig_plot, nrow = 1)
-  ggsave(paste0('figures/cwm_guild_plot', mod, ".pdf"), units = "in", height = 5, width = 18)
-}
-
-cwm_guild_hab_plots <- cwm_guild_unnest %>%
-  filter(scale == 2, spp == "no transients") %>%
-  group_by(focal_rte, trait_grp, trait_val) %>%
-  filter(!is.na(trait_val)) %>%
-  nest() %>%
-  mutate(n_bins = purrr::map_dbl(data, ~{nrow(.)})) %>%
-  filter(n_bins == 5 | n_bins == 6) %>%
-  mutate(range_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_for_range ~ year_bin, data = df))
-  }),
-  mean_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(cwm_for_mean ~ year_bin, data = df))
-  }),
-  abund_mod = purrr::map(data, ~{
-    df <- .
-    tidy(lm(abund ~ year_bin, data = df))
-  })) %>%
-  dplyr::select(-data) %>%
-  pivot_longer(range_mod:abund_mod, names_to = "model", values_to = "table") %>%
-  unnest(cols = c("table")) %>%
-  filter(term == "year_bin") %>%
-  group_by(trait_grp, trait_val) %>%
-  mutate(abund_trend = median(estimate[model == "abund_mod"]))
-
-guild_hab_plot_labels <- data.frame(mod = c("mean_mod", "range_mod"), label = c("Mean forest", "Forest range"))
-
-for(i in 1:2) {
-  mod <- guild_hab_plot_labels$mod[i]
-  lab <- guild_hab_plot_labels$label[i]
-  
-  forage_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Foraging"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5)) +
-    scale_fill_distiller(palette = "RdBu") +
-    scale_x_discrete(labels = forage_n$label) +
-    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2)
-  
-  trophic_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "Trophic.Group"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5)) +
-    scale_fill_distiller(palette = "RdBu") +
-    scale_x_discrete(labels = trophic_n$label) +
-    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2)
-  
-  mig_plot <- ggplot(filter(cwm_guild_hab_plots, model == mod, trait_grp == "migclass"), aes(x = trait_val, y = estimate, fill = abund_trend)) +
-    geom_violin(trim = T, draw_quantiles = c(0.5)) +
-    scale_fill_distiller(palette = "RdBu") +
-    scale_x_discrete(labels = mig_n$label) +
-    labs(y = "Change in CWM", x = "", title = lab) + coord_flip() +
-    geom_hline(yintercept = 0, lty = 2)
-  
-  plot_grid(forage_plot, trophic_plot, mig_plot, nrow = 1)
-  ggsave(paste0('figures/cwm_guild_plot_hab_', mod, ".pdf"), units = "in", height = 5, width = 18)
-}
-
-## Guild CWMs -- maps
-# Which guild matches closest to overall cwm value
-
-cwm_temp_compare <- cwm_temp_plots %>%
-  dplyr::select(focal_rte, model, estimate) %>%
-  rename("total_cwm" = estimate) %>%
-  right_join(cwm_guild_temp_plots, by = c("focal_rte", "model")) %>%
-  filter(model != "abund_mod") %>%
-  group_by(focal_rte, trait_grp, model) %>%
-  filter(ifelse(total_cwm > 0, estimate == max(estimate), estimate == min(estimate))) %>%
-  mutate(abs_est = abs(estimate),
-         est_sign = ifelse(estimate > 0, "+", NA)) %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  st_as_sf(coords = c("longitude", "latitude")) %>%
-  st_set_crs(4326)
-
-# Temperature mean, range, body size, 3 panels (1 per guild)
-
-for(i in c("mean_mod", "range_mod", "body_mod")) {
-
-map_mean_for <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "Foraging")) + 
-  tm_dots(col = "trait_val", size = "abs_est") +
-  tm_shape(filter(cwm_temp_compare, model == "mean_mod", trait_grp == "Foraging", est_sign == "+")) + 
-  tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
-
-map_mean_trop <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "Trophic.Group")) + 
-  tm_dots(col = "trait_val", size = "abs_est") +
-  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "Trophic.Group", est_sign == "+")) + 
-  tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
-
-map_mean_mig <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "migclass")) + 
-  tm_dots(col = "trait_val", size = "abs_est") +
-  tm_shape(filter(cwm_temp_compare, model == i, trait_grp == "migclass", est_sign == "+")) + 
-  tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
-
-map_guild <- tmap_arrange(map_mean_for, map_mean_trop, map_mean_mig, nrow = 2)
-tmap_save(map_guild, paste0("figures/cwm_guild_map_", i, ".pdf"), units = "in", height = 12, width = 10)
-
-}
-
-cwm_hab_compare <- cwm_hab_plots %>%
-  dplyr::select(focal_rte, model, estimate) %>%
-  rename("total_cwm" = estimate) %>%
-  right_join(cwm_guild_hab_plots, by = c("focal_rte", "model")) %>%
-  filter(model != "abund_mod") %>%
-  group_by(focal_rte, trait_grp, model) %>%
-  filter(ifelse(total_cwm > 0, estimate == max(estimate), estimate == min(estimate))) %>%
-  mutate(abs_est = abs(estimate),
-         est_sign = ifelse(estimate > 0, "+", NA)) %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  st_as_sf(coords = c("longitude", "latitude")) %>%
-  st_set_crs(4326)
-
-# Habitat mean, range, body size, 3 panels (1 per guild)
-
-for(i in c("mean_mod", "range_mod")) {
-  
-  map_mean_for <- tm_shape(na) + tm_polygons(col = "gray50") + 
-    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "Foraging")) + 
-    tm_dots(col = "trait_val", size = "abs_est") +
-    tm_shape(filter(cwm_hab_compare, model == "mean_mod", trait_grp == "Foraging", est_sign == "+")) + 
-    tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
-  
-  map_mean_trop <- tm_shape(na) + tm_polygons(col = "gray50") + 
-    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "Trophic.Group")) + 
-    tm_dots(col = "trait_val", size = "abs_est") +
-    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "Trophic.Group", est_sign == "+")) + 
-    tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
-  
-  map_mean_mig <- tm_shape(na) + tm_polygons(col = "gray50") + 
-    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "migclass")) + 
-    tm_dots(col = "trait_val", size = "abs_est") +
-    tm_shape(filter(cwm_hab_compare, model == i, trait_grp == "migclass", est_sign == "+")) + 
-    tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5)
-  
-  map_guild <- tmap_arrange(map_mean_for, map_mean_trop, map_mean_mig, nrow = 2)
-  tmap_save(map_guild, paste0("figures/cwm_guild_map_hab_", i, ".pdf"), units = "in", height = 12, width = 10)
-  
-}

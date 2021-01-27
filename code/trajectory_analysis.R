@@ -19,17 +19,24 @@ library(grid)
 
 theme_set(theme_classic(base_size = 15))
 
+
+# Append correct BioArk path
+info <- sessionInfo()
+bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
+
 ## North America map
 
 na <- read_sf("data/ne_50m_admin_1_states_provinces_lakes.shp") %>%
   filter(sr_adm0_a3 == "USA" | sr_adm0_a3 == "CAN") %>%
   st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
 
-## Read in data
+## BCR map
 
-# Append correct BioArk path
-info <- sessionInfo()
-bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
+bcr <- read_sf(paste0(bioark,"/HurlbertLab/DiCecco/bcr_terrestrial_shape/BCR_Terrestrial_master.shp")) %>%
+  filter(BCR %in% bcr_subset$bcr) %>%
+  mutate_at(c("BCR"), ~as.factor(.))
+
+## Read in data
 
 # Species list 
 
@@ -51,15 +58,6 @@ bbs_subset <- read.csv("data/bbs_counts_subset_1990-2016.csv", stringsAsFactors 
 
 routes <- read.csv(paste0(bioark, "/hurlbertlab/databases/BBS/2017/bbs_routes_20170712.csv"), stringsAsFactors = F) %>%
   mutate(stateroute = statenum*1000 + route)
-
-# BBS half-route directionality
-
-half_route_dir <- read.csv("data/half_route_directionality.csv", stringsAsFactors = F)
-
-# Land cover and climate data - 1/2 route scale
-
-bbs_half_landcover <- read.csv('data/bbs_half_route_max_land_change.csv', stringsAsFactors = F)
-bbs_half_climate <- read.csv("data/bbs_half_route_breeding_season_climate.csv", stringsAsFactors = F)
 
 # Land cover and climate data - 1 route scale
 
@@ -221,13 +219,6 @@ mean_bcr_distances <- mean_bbs_distances %>%
 bcr_subset <- bcr_sample_size %>%
   filter(n_routes > 25)
 
-mean_dist_plot <- ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr), 
-       aes(x = scale, y = mean_dist_bcr, col = bcr, group = bcr)) + 
-  geom_line(cex = 1) +
-  scale_color_viridis_c() +
-  labs(x = "Scale (routes)", y = "Mean distance between routes (km)", col = "BCR")
-# ggsave("figures/scale_aggregated_routes.pdf")
-
 # % overlap of aggregated stateroutes at each spatial scale x bcr
 
 pct_overlap <- mean_bbs_distances %>%
@@ -244,17 +235,7 @@ mean_pct_overlap <- pct_overlap %>%
   group_by(bcr, scale) %>%
   summarize(mean_reps = mean(pct_reps))
 
-pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = bcr, group = bcr)) + 
-  geom_line(cex = 1) +
-  scale_color_viridis_c() +
-  labs(x = "Scale (routes)", y = "Avg percent of aggregates route occurs in", col = "BCR")
-# ggsave("figures/percent_overlap_aggregates.pdf")
-
-## Aggregation methods fig
-
-bcr <- read_sf("\\\\BioArk//HurlbertLab//DiCecco//bcr_terrestrial_shape//BCR_Terrestrial_master.shp") %>%
-  filter(BCR %in% bcr_subset$bcr) %>%
-  mutate_at(c("BCR"), ~as.factor(.))
+#### BCR map and aggregation suppl fig ####
 
 study_routes <- bbs_subset %>%
   ungroup() %>%
@@ -266,7 +247,9 @@ study_routes <- bbs_subset %>%
 bcr_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(bcr) + tm_polygons(col = "BCR") +
   tm_shape(study_routes) + tm_dots(col = "black", size = 0.05) + 
-  tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0))
+  tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
+            inner.margins = c(0.02, 0.05, 0.02, 0.02), legend.position = c("left", "bottom"))
+tmap_save(bcr_map, "figures/bcr_aggregation.pdf", units = "in", height = 6, width = 13)
 
 bcr_palette <- tmaptools::get_brewer_pal("Set3", n = 15)
 names(bcr_palette) <- as.factor(unique(bcr$BCR))
@@ -275,8 +258,9 @@ mean_dist_plot <- ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr),
                          aes(x = scale, y = mean_dist_bcr, col = as.factor(bcr), group = as.factor(bcr))) + 
   geom_line(cex = 1) +
   scale_color_manual(values = bcr_palette) +
-  labs(x = "Scale (routes)", y = "Mean distance between routes (km)", col = "BCR") +
-  theme(legend.position = "none")
+  labs(x = "Scale (routes)", y = "Mean distance between routes (km)", col = "BCR") 
+
+legend <- get_legend(mean_dist_plot)
 
 pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.factor(bcr), group = as.factor(bcr))) + 
   geom_line(cex = 1) +
@@ -284,14 +268,10 @@ pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.fact
   labs(x = "Scale (routes)", y = "Avg percent of aggregates route occurs in", col = "BCR") +
   theme(legend.position = "none")
 
-line_panels <- plot_grid(mean_dist_plot, pct_plot, ncol = 2)
-
-grid.newpage()
-pdf(paste0(getwd(),"/figures/bcr_aggregation_multipanel.pdf"), height = 12, width = 12)
-pushViewport(viewport(layout = grid.layout(nrow = 2, ncol = 1)))
-print(bcr_map, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
-print(line_panels, vp = viewport(layout.pos.row = 2, layout.pos.col = 1))
-dev.off()
+plot_grid(mean_dist_plot+theme(legend.position = "none"), pct_plot, legend,
+                         labels = c("A", "B", ""), rel_widths = c(0.45, 0.45, 0.1),
+                         ncol = 3)
+ggsave(paste0(getwd(),"/figures/bcr_aggregation_multipanel.pdf"), units = "in", height = 5, width = 10)
 
 ## Log abund from 1 route up to nearest 25 routes
 ## One data point per 4 year time window

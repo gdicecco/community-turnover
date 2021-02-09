@@ -1251,6 +1251,14 @@ guild_list <- guild_core_spp %>%
   dplyr::select(aou, Breeding.Biome, migclass, Foraging, Trophic.Group) %>%
   distinct()
 
+# write trait table for MS supplement
+trait_list <- guild_core_spp %>%
+  ungroup() %>%
+  dplyr::select(aou, CommonName, sci_name, Breeding.Biome, migclass, Foraging, Trophic.Group) %>%
+  distinct() %>%
+  filter(!(is.na(CommonName)))
+write.csv(trait_list, "data/species_trait_list_ms.csv", row.names = F)
+
 guild_excl_dirs <- regional_rtes %>%
   group_by(focal_rte) %>%
   nest() %>%

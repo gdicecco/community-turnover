@@ -51,7 +51,7 @@ bird_traits <- read.csv("data/Master_RO_Correlates_20110610.csv", stringsAsFacto
 habitat_guilds <- read.csv("data/aaw1313_Data_S1.csv", stringsAsFactors = F)
 
 # BBS sampled every 5 years from 1970 to 2016
-log_abund <- read.csv("data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors = F)
+log_abund <- read.csv("data/derived_data/bbs_subset_1970-2016_logabund.csv", stringsAsFactors = F)
 
 # BBS sampled 3/4 years every 4 year time window
 bbs_subset <- read.csv("data/bbs_counts_subset_1990-2016.csv", stringsAsFactors = F)
@@ -61,8 +61,8 @@ routes <- read.csv(paste0(bioark, "/hurlbertlab/databases/BBS/2017/bbs_routes_20
 
 # Land cover and climate data - 1 route scale
 
-bbs_landcover <- read.csv("data/bbs_route_max_landcover_change.csv", stringsAsFactors = F)
-bbs_climate <- read.csv("data/bbs_routes_climate_trends.csv", stringsAsFactors = F)
+bbs_landcover <- read.csv("data/derived_data/bbs_route_max_landcover_change.csv", stringsAsFactors = F)
+bbs_climate <- read.csv("data/derived_data/bbs_routes_climate_trends.csv", stringsAsFactors = F)
 
 ## Raw land cover and climate data for calculating multiple scales
 
@@ -110,7 +110,7 @@ possibly_max_delta <- possibly(max_delta, data.frame(common_label = NA, deltaCov
 
 ## Climate trends
 
-bbs_climate_avgs <- read.csv("data/bbs_routes_breeding_season_climate.csv", stringsAsFactors = F) %>%
+bbs_climate_avgs <- read.csv("data/derived_data/bbs_routes_breeding_season_climate.csv", stringsAsFactors = F) %>%
   left_join(routes) %>%
   mutate(min_year = case_when(countrynum == 840 ~ 1992,
                               countrynum == 124 ~ 1990),
@@ -439,11 +439,11 @@ scale_model_variables <- scale_model_input %>%
 
 scale_model_variables_unnest <- scale_model_variables %>%
   unnest(cols = c(data))
-# write.csv(scale_model_variables_unnest, "data/scale_model_input.csv", row.names = F)
+# write.csv(scale_model_variables_unnest, "data/derived_data/scale_model_input.csv", row.names = F)
 
-scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+scale_model_variables_unnest <- read.csv("data/derived_data/scale_model_input.csv", stringsAsFactors = F)
 
-scale_model_variables <- read.csv("data/scale_model_input.csv", stringsAsFactors = F) %>%
+scale_model_variables <- read.csv("data/derived_data/scale_model_input.csv", stringsAsFactors = F) %>%
   group_by(scale) %>%
   nest()
 
@@ -488,8 +488,8 @@ part2 <- mod12.r2 - mod1.r2 # land cover alone
 joined <- mod1.r2 - part1 # shared variance
 unexpl <- 1 - mod12.r2 # unexplained variance
 
-# write.csv(scale_model_output, "data/scale_model_output_variance.csv", row.names = F)
-scale_model_output <- read.csv("data/scale_model_output_variance.csv")
+# write.csv(scale_model_output, "data/derived_data/scale_model_output_variance.csv", row.names = F)
+scale_model_output <- read.csv("data/derived_data/scale_model_output_variance.csv")
 
 # Scale model figures 
 
@@ -504,7 +504,7 @@ all_routes <- ggplot(filter(scale_model_plot, variance != "unexpl"), aes(x = sca
 
 # Scale model predictor effects
 
-scale_model_variables <-  read.csv("data/scale_model_input.csv", stringsAsFactors = F) %>%
+scale_model_variables <-  read.csv("data/derived_data/scale_model_input.csv", stringsAsFactors = F) %>%
   group_by(scale) %>%
   nest()
 
@@ -833,13 +833,13 @@ best_routes_5 <- best_pair_5  %>%
   pivot_longer(1:5, names_to = "rte", values_to = "focal_rte")
 
 low_overlap_focal_routes <- bind_rows(focal_routes_1, best_routes_2, best_routes_3, best_routes_4, best_routes_5)
-# write.csv(low_overlap_focal_routes, "data/low_overlap_focal_routes.csv", row.names = F)
+# write.csv(low_overlap_focal_routes, "data/derived_data/low_overlap_focal_routes.csv", row.names = F)
 
-low_overlap_focal_routes <- read.csv("data/low_overlap_focal_routes.csv")
+low_overlap_focal_routes <- read.csv("data/derived_data/low_overlap_focal_routes.csv")
 
 ## Run models for just focal routes 
 
-scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
+scale_model_variables_unnest <- read.csv("data/derived_data/scale_model_input.csv", stringsAsFactors = F)
 
 low_overlap_model_variables <- scale_model_variables_unnest %>%
   filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
@@ -867,8 +867,8 @@ for(i in 1:25) {
                               data.frame(scale = i, part1 = part1, part2 = part2,
                                          joined = joined, unexpl = unexpl))
 }
-# write.csv(LO_scale_model_output, "data/low_overlap_scale_model_output_deviance.csv", row.names = F)
-LO_scale_model_output <- read.csv("data/low_overlap_scale_model_output_deviance.csv", stringsAsFactors = F)
+# write.csv(LO_scale_model_output, "data/derived_data/low_overlap_scale_model_output_deviance.csv", row.names = F)
+LO_scale_model_output <- read.csv("data/derived_data/low_overlap_scale_model_output_deviance.csv", stringsAsFactors = F)
 
 LO_scale_model_plot <- LO_scale_model_output %>%
   pivot_longer(part1:unexpl, names_to = "variance")  %>%
@@ -1028,9 +1028,9 @@ dev.off()
 # Directionality values at 25 route scales
 # Regional high leverage species
 
-scale_model_variables_unnest <- read.csv("data/scale_model_input.csv", stringsAsFactors = F)
-abund_trends <- read.csv("data/BBS_abundance_trends.csv", stringsAsFactors = F)
-low_overlap_focal_routes <- read.csv("data/low_overlap_focal_routes.csv")
+scale_model_variables_unnest <- read.csv("data/derived_data/scale_model_input.csv", stringsAsFactors = F)
+abund_trends <- read.csv("data/derived_data/BBS_abundance_trends.csv", stringsAsFactors = F)
+low_overlap_focal_routes <- read.csv("data/derived_data/low_overlap_focal_routes.csv")
 
 regional_rtes <- bbs_route_distances %>%
   group_by(focal_rte) %>%
@@ -1067,7 +1067,7 @@ spp_cor <- regional_abund_trends %>%
   arrange(desc(abs(abund_dir_r))) %>%
   slice(1:10) %>%
   select(aou, n_regions, abund_dir_r, english_common_name)
-# write.csv(spp_cor, "data/high_leverage_spp.csv", row.names = F)
+# write.csv(spp_cor, "data/derived_data/high_leverage_spp.csv", row.names = F)
 
 # High leverage species with leave-one-out calculations of directionality (@25 route scales)
 
@@ -1159,9 +1159,9 @@ spp_dir_deltas <- regional_rtes %>%
 spp_dir_unnest <- spp_dir_deltas %>%
   select(-data, -spp_list, -n_spp) %>%
   unnest(spp_dir)
-# write.csv(spp_dir_unnest, "data/species-leave-one-out-directionality.csv", row.names = F)
+# write.csv(spp_dir_unnest, "data/derived_data/species-leave-one-out-directionality.csv", row.names = F)
 
-spp_dir_unnest <- read.csv("data/species-leave-one-out-directionality.csv", stringsAsFactors = F)
+spp_dir_unnest <- read.csv("data/derived_data/species-leave-one-out-directionality.csv", stringsAsFactors = F)
 
 regional_dir_core <- scale_model_variables_unnest %>%
   filter(scale == 25) %>%
@@ -1182,9 +1182,9 @@ high_impact_spp <- spp_dir_diffs %>%
   arrange(desc(n_regions)) %>%
   left_join(fourletter_codes) %>%
   filter(!is.na(SPEC))
-# write.csv(high_impact_spp, "data/spec-LOO-directionality-hi-impact.csv", row.names = F)
+# write.csv(high_impact_spp, "data/derived_data/spec-LOO-directionality-hi-impact.csv", row.names = F)
 
-high_impact_spp <- read.csv("data/spec-LOO-directionality-hi-impact.csv", stringsAsFactors = F)
+high_impact_spp <- read.csv("data/derived_data/spec-LOO-directionality-hi-impact.csv", stringsAsFactors = F)
 
 top_ten <- high_impact_spp %>%
   slice(1:10)
@@ -1230,7 +1230,7 @@ dominant_spp_list <- dominant_spp %>%
   arrange(desc(n_regions)) %>%
   left_join(fourletter_codes) %>%
   filter(!is.na(SPEC))
-# write.csv(dominant_spp_list, "data/spec-LOO-hi-directionality-ties.csv", row.names = F)
+# write.csv(dominant_spp_list, "data/derived_data/spec-LOO-hi-directionality-ties.csv", row.names = F)
 
 n_regions_tied <- dominant_spp %>%
   group_by(focal_rte) %>%
@@ -1257,7 +1257,7 @@ trait_list <- guild_core_spp %>%
   dplyr::select(aou, CommonName, sci_name, Breeding.Biome, migclass, Foraging, Trophic.Group) %>%
   distinct() %>%
   filter(!(is.na(CommonName)))
-write.csv(trait_list, "data/species_trait_list_ms.csv", row.names = F)
+# write.csv(trait_list, "data/derived_data/species_trait_list_ms.csv", row.names = F)
 
 guild_excl_dirs <- regional_rtes %>%
   group_by(focal_rte) %>%
@@ -1421,8 +1421,8 @@ forage_dir_diffs <- guild_excl_dirs %>%
   filter(!is.na(Foraging), Foraging %in% forage_over5$Foraging) %>%
   left_join(forage_over5) %>%
   mutate(forage_plot = paste0(str_to_title(Foraging), " (", n_spp, ")"))
-# write.csv(forage_dir_diffs, "data/guild_LOO_dir_impact_foraging.csv", row.names = F)
-forage_dir_diffs <- read.csv("data/guild_LOO_dir_impact_foraging.csv", stringsAsFactors = F)
+# write.csv(forage_dir_diffs, "data/derived_data/guild_LOO_dir_impact_foraging.csv", row.names = F)
+forage_dir_diffs <- read.csv("data/derived_data/guild_LOO_dir_impact_foraging.csv", stringsAsFactors = F)
 
 trophic_over5 <- guild_list %>%
   group_by(Trophic.Group) %>%
@@ -1438,8 +1438,8 @@ trophic_dir_diffs <- guild_excl_dirs %>%
   left_join(trophic_over5) %>%
   mutate_at(c("Trophic.Group"), ~ifelse(. == "insct/om", "insect/omnivore", .)) %>%
   mutate(trophic_plot = paste0(str_to_title(Trophic.Group), " (", n_spp, ")"))
-# write.csv(trophic_dir_diffs, "data/guild_LOO_dir_impact_trophic.csv", row.names = F)
-trophic_dir_diffs <- read.csv("data/guild_LOO_dir_impact_trophic.csv", stringsAsFactors = F)
+# write.csv(trophic_dir_diffs, "data/derived_data/guild_LOO_dir_impact_trophic.csv", row.names = F)
+trophic_dir_diffs <- read.csv("data/derived_data/guild_LOO_dir_impact_trophic.csv", stringsAsFactors = F)
 
 mig_over5 <- guild_list %>%
   group_by(migclass) %>%
@@ -1457,8 +1457,8 @@ mig_dir_diffs <- guild_excl_dirs %>%
                                       . == "resid" ~ "resident",
                                       . == "neotrop" ~ "long distance")) %>%
   mutate(mig_plot = paste0(str_to_title(migclass), " (", n_spp, ")"))
-# write.csv(mig_dir_diffs, "data/guild_LOO_dir_impact_migclass.csv", row.names = F)
-mig_dir_diffs <- read.csv("data/guild_LOO_dir_impact_migclass.csv", stringsAsFactors = F)
+# write.csv(mig_dir_diffs, "data/derived_data/guild_LOO_dir_impact_migclass.csv", row.names = F)
+mig_dir_diffs <- read.csv("data/derived_data/guild_LOO_dir_impact_migclass.csv", stringsAsFactors = F)
 
 hab_over5 <- guild_list %>%
   group_by(Breeding.Biome) %>%
@@ -1473,8 +1473,8 @@ hab_dir_diffs <- guild_excl_dirs %>%
   filter(!is.na(Breeding.Biome), Breeding.Biome %in% hab_over5$Breeding.Biome) %>%
   left_join(hab_over5) %>%
   mutate(hab_plot = paste0(str_to_title(Breeding.Biome), " (", n_spp, ")"))
-# write.csv(hab_dir_diffs, "data/guild_LOO_dir_impact_habitat.csv", row.names = F)
-hab_dir_diffs <- read.csv("data/guild_LOO_dir_impact_habitat.csv", stringsAsFactors = F)
+# write.csv(hab_dir_diffs, "data/derived_data/guild_LOO_dir_impact_habitat.csv", row.names = F)
+hab_dir_diffs <- read.csv("data/derived_data/guild_LOO_dir_impact_habitat.csv", stringsAsFactors = F)
 
 foraging_plot <- ggplot(forage_dir_diffs, aes(x = forage_plot, y = dir_diff)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +

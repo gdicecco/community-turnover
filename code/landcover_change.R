@@ -54,32 +54,6 @@ max_delta <- function(df) {
 
 possibly_max_delta <- possibly(max_delta, data.frame(common_label = NA, deltaCover = NA))
 
-bbs_maxdeltas <- bbs_halfroutes %>%
-  mutate(min_year = case_when(country == "US" ~ 1992,
-                              TRUE ~ 1990),
-         max_year = case_when(country == "US" ~ 2016,
-                              TRUE ~ 2010)) %>%
-  group_by(country, stateroute, stops) %>%
-  nest() %>%
-  mutate(maxDelta = map(data, ~possibly_max_delta(.))) %>%
-  select(-data) %>%
-  unnest() %>%
-  mutate_at(c("deltaCover"), ~case_when(country == "US" ~ ./25,
-                                        country == "Canada" ~ ./21))
-# write.csv(bbs_maxdeltas, "data/bbs_half_route_max_land_change.csv", row.names = F)
-
-# Correlation between max land cover values for half routes
-
-bbs_maxdeltas_complete <- bbs_maxdeltas %>%
-  group_by(stateroute) %>%
-  filter(n() == 2)
-
-cor(filter(bbs_maxdeltas_complete, stops == "1-25")$class, filter(bbs_maxdeltas_complete, stops == "26-50")$class, use = "pairwise.complete.obs")
-# 0.9
-
-cor(filter(bbs_maxdeltas_complete, stops == "1-25")$deltaCover, filter(bbs_maxdeltas_complete, stops == "26-50")$deltaCover, use = "pairwise.complete.obs")
-# 0.5
-
 # For single routes - max land cover change
 
 landcover_us <- read.csv("/Volumes/hurlbertlab/dicecco/data/fragmentation_indices_nlcd_simplified.csv", stringsAsFactors = F) %>%
@@ -99,7 +73,7 @@ oneroute_maxdeltas <- landcover_na %>%
   mutate(maxDelta = map(data, ~possibly_max_delta(.))) %>%
   select(-data) %>%
   unnest()
-# write.csv(oneroute_maxdeltas, "data/bbs_route_max_landcover_change.csv", row.names = F)
+# write.csv(oneroute_maxdeltas, "data/derived_data/bbs_route_max_landcover_change.csv", row.names = F)
 
 # Category of maximum land cover change
 

@@ -68,4 +68,4 @@ bird_temps <- birds.subs %>%
     })) %>%
   dplyr::select(-data)
 
-write.csv(bird_temps, "data/bbs_aou_temp_range.csv", row.names = F)
+write.csv(bird_temps, "data/derived_data/bbs_aou_temp_range.csv", row.names = F)

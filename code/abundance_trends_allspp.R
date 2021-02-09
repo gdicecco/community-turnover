@@ -119,4 +119,4 @@ abund_trend <- counts.subs %>%
 
 abund_trend_write <- abund_trend %>%
   select(-data, -lmFit, -lm_broom)
-write.csv(abund_trend_write, "data/BBS_abundance_trends.csv", row.names = F)
+write.csv(abund_trend_write, "data/derived_data/BBS_abundance_trends.csv", row.names = F)

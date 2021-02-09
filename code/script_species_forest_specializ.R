@@ -5,9 +5,9 @@ library(tidyverse)
 
 ## Make master data table
 
-abund_trend <- read.csv("data/BBS_abundance_trends.csv", stringsAsFactors = F)
+abund_trend <- read.csv("data/derived_data//BBS_abundance_trends.csv", stringsAsFactors = F)
 
-env_change <- read.csv("data/bbs_route_env_change.csv", stringsAsFactors = F)
+env_change <- read.csv("data/derived_data/bbs_route_env_change.csv", stringsAsFactors = F)
 
 clim_hab_poptrend <- abund_trend %>%
   left_join(env_change, by = "stateroute") %>%
@@ -74,5 +74,5 @@ env_breadth_allroutes <- clim_hab_pop_allroutes %>%
             std_patch = sd(meanPatchArea),
             for_range = max_for - min_for)
 
-write.csv(env_breadth_allroutes, "data/spp_forest_traits.csv", row.names = F)
+write.csv(env_breadth_allroutes, "data/derived_data/spp_forest_traits.csv", row.names = F)
 

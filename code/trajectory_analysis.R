@@ -19,7 +19,6 @@ library(grid)
 
 theme_set(theme_classic(base_size = 15))
 
-
 # Append correct BioArk path
 info <- sessionInfo()
 bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
@@ -29,12 +28,6 @@ bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
 na <- read_sf("data/ne_50m_admin_1_states_provinces_lakes.shp") %>%
   filter(sr_adm0_a3 == "USA" | sr_adm0_a3 == "CAN") %>%
   st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
-
-## BCR map
-
-bcr <- read_sf(paste0(bioark,"/HurlbertLab/DiCecco/bcr_terrestrial_shape/BCR_Terrestrial_master.shp")) %>%
-  filter(BCR %in% bcr_subset$bcr) %>%
-  mutate_at(c("BCR"), ~as.factor(.))
 
 ## Read in data
 
@@ -236,6 +229,12 @@ mean_pct_overlap <- pct_overlap %>%
   summarize(mean_reps = mean(pct_reps))
 
 #### BCR map and aggregation suppl fig ####
+
+## BCR map
+
+bcr <- read_sf(paste0(bioark,"/HurlbertLab/DiCecco/bcr_terrestrial_shape/BCR_Terrestrial_master.shp")) %>%
+  filter(BCR %in% bcr_subset$bcr) %>%
+  mutate_at(c("BCR"), ~as.factor(.))
 
 study_routes <- bbs_subset %>%
   ungroup() %>%
@@ -1539,7 +1538,7 @@ lc_1route <- scale_model_variables_unnest %>%
   st_crop(xmin = -130, ymin = 18, xmax = -57, ymax = 60)
 
 theme_set(theme_classic(base_size = 20))
-class_change <- ggplot(lc_1route, aes(x = max_lc_class, y = max_lc, fill = max_lc_class)) + 
+class_change <- ggplot(lc_1route, aes(x = fct_rev(max_lc_class), y = max_lc, fill = max_lc_class)) + 
   geom_violin(draw_quantiles = c(0.5)) + 
   geom_hline(yintercept = 0, lty = 2) +
   theme(legend.position = "none") +

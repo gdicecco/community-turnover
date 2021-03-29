@@ -261,7 +261,7 @@ mean_dist_plot <- ggplot(filter(mean_bcr_distances, bcr %in% bcr_subset$bcr),
 
 legend <- get_legend(mean_dist_plot)
 
-pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps, col = as.factor(bcr), group = as.factor(bcr))) + 
+pct_plot <- ggplot(mean_pct_overlap, aes(x = scale, y = mean_reps*100, col = as.factor(bcr), group = as.factor(bcr))) + 
   geom_line(cex = 1) +
   scale_color_manual(values = bcr_palette) +
   labs(x = "Scale (routes)", y = "Avg percent of aggregates route occurs in", col = "BCR") +
@@ -1245,11 +1245,6 @@ guild_core_spp <- core_spp %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
   left_join(dplyr::select(habitat_guilds, species, sci_name, Breeding.Biome), by = c("CommonName" = "species"))
 
-guild_list <- guild_core_spp %>%
-  ungroup() %>%
-  dplyr::select(aou, Breeding.Biome, migclass, Foraging, Trophic.Group) %>%
-  distinct()
-
 # write trait table for MS supplement
 trait_list <- guild_core_spp %>%
   ungroup() %>%
@@ -1257,6 +1252,19 @@ trait_list <- guild_core_spp %>%
   distinct() %>%
   filter(!(is.na(CommonName)))
 # write.csv(trait_list, "data/derived_data/species_trait_list_ms.csv", row.names = F)
+
+# add missing species from Rosenberg (Bicknell's Thrush, Gunnison Sage-Grouse)
+# update common names
+
+guild_spp_list <- read.csv("data/derived_data/species_trait_list_ms_updated_names.csv", stringsAsFactors = F) %>%
+  right_join(core_spp)
+
+guild_list <- guild_spp_list %>%
+  ungroup() %>%
+  dplyr::select(aou, Breeding.Biome, migclass, Foraging, Trophic.Group) %>%
+  distinct()
+
+# leave one out directionality calculations
 
 guild_excl_dirs <- regional_rtes %>%
   group_by(focal_rte) %>%

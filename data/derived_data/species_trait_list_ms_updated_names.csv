@@ -1,0 +1,277 @@
+aou,CommonName,sci_name,Breeding.Biome,migclass,Foraging,Trophic.Group
+2890,Northern Bobwhite,Colinus virginianus,Eastern Forest,resid,ground glean,herbivore
+3131,Rock Pigeon,Columba livia,Introduced,resid,ground glean,granivore
+3160,Mourning Dove,Zenaida macroura,Habitat Generalist,short,ground glean,granivore
+3870,Yellow-billed Cuckoo,Coccyzus americanus,Eastern Forest,neotrop,foliage glean,insectivore
+3930,Hairy Woodpecker,Dryobates villosus,Forest Generalist,resid,bark glean,insectivore
+3940,Downy Woodpecker,Dryobates pubescens,Forest Generalist,resid,bark glean,insectivore
+4050,Pileated Woodpecker,Dryocopus pileatus,Eastern Forest,resid,bark glean,insectivore
+4060,Red-headed Woodpecker,Melanerpes erythrocephalus,Eastern Forest,short,bark glean,omnivore
+4090,Red-bellied Woodpecker,Melanerpes carolinus,Eastern Forest,resid,bark glean,insectivore
+4120,Northern Flicker,Colaptes auratus,Forest Generalist,resid,ground glean,insectivore
+4230,Chimney Swift,Chaetura pelagica,Eastern Forest,neotrop,aerial foraging,insectivore
+4280,Ruby-throated Hummingbird,Archilochus colubris,Eastern Forest,neotrop,hover/glean,nectarivore
+4440,Eastern Kingbird,Tyrannus tyrannus,Grassland,neotrop,hawks,insectivore
+4520,Great Crested Flycatcher,Myiarchus crinitus,Eastern Forest,neotrop,hawks,insectivore
+4560,Eastern Phoebe,Sayornis phoebe,Eastern Forest,short,hawks,insectivore
+4610,Eastern Wood-Pewee,Contopus virens,Eastern Forest,neotrop,hawks,insectivore
+4650,Acadian Flycatcher,Empidonax virescens,Eastern Forest,neotrop,hawks,insectivore
+4740,Horned Lark,Eremophila alpestris,Grassland,short,ground glean,granivore
+4770,Blue Jay,Cyanocitta cristata,Eastern Forest,short,ground glean,omnivore
+4880,American Crow,Corvus brachyrhynchos,Habitat Generalist,short,ground glean,omnivore
+4930,European Starling,Sturnus vulgaris,Introduced,short,ground glean,insectivore
+4950,Brown-headed Cowbird,Molothrus ater,Habitat Generalist,short,ground glean,insectivore
+4980,Red-winged Blackbird,Agelaius phoeniceus,Habitat Generalist,short,ground glean,insectivore
+5010,Eastern Meadowlark,Sturnella magna,Grassland,short,ground glean,insct/om
+5060,Orchard Oriole,Icterus spurius,Eastern Forest,neotrop,foliage glean,insct/om
+5110,Common Grackle,Quiscalus quiscula,Habitat Generalist,short,ground glean,omnivore
+5190,House Finch,Haemorhous mexicanus,Habitat Generalist,short,ground glean,granivore
+5290,American Goldfinch,Spinus tristis,Forest Generalist,short,foliage glean,granivore
+5460,Grasshopper Sparrow,Ammodramus savannarum,Grassland,neotrop,ground glean,insct/om
+5600,Chipping Sparrow,Spizella passerina,Forest Generalist,neotrop,ground glean,insct/om
+5630,Field Sparrow,Spizella pusilla,Eastern Forest,short,ground glean,insct/om
+5810,Song Sparrow,Melospiza melodia,Habitat Generalist,short,ground glean,insct/om
+5870,Eastern Towhee,Pipilo erythrophthalmus,Eastern Forest,short,ground glean,insct/om
+5930,Northern Cardinal,Cardinalis cardinalis,Eastern Forest,resid,ground glean,insct/om
+5970,Blue Grosbeak,Passerina caerulea,Forest Generalist,neotrop,ground glean,insectivore
+5980,Indigo Bunting,Passerina cyanea,Eastern Forest,neotrop,ground glean,insct/om
+6040,Dickcissel,Spiza americana,Grassland,neotrop,ground glean,insct/om
+6080,Scarlet Tanager,Piranga olivacea,Eastern Forest,neotrop,hover/glean,insectivore
+6100,Summer Tanager,Piranga rubra,Eastern Forest,neotrop,foliage glean,insectivore
+6110,Purple Martin,Progne subis,Habitat Generalist,neotrop,aerial foraging,insectivore
+6120,Cliff Swallow,Petrochelidon pyrrhonota,Habitat Generalist,neotrop,aerial foraging,insectivore
+6130,Barn Swallow,Hirundo rustica,Habitat Generalist,neotrop,aerial foraging,insectivore
+6170,Northern Rough-winged Swallow,Stelgidopteryx serripennis,Habitat Generalist,neotrop,aerial foraging,insectivore
+6190,Cedar Waxwing,Bombycilla cedrorum,Forest Generalist,short,foliage glean,insct/om
+6220,Loggerhead Shrike,Lanius ludovicianus,Grassland,short,swoops,insectivore
+6240,Red-eyed Vireo,Vireo olivaceus,Forest Generalist,neotrop,hover/glean,insectivore
+6280,Yellow-throated Vireo,Vireo flavifrons,Eastern Forest,neotrop,foliage glean,insectivore
+6310,White-eyed Vireo,Vireo griseus,Eastern Forest,neotrop,foliage glean,insectivore
+6480,Northern Parula,Setophaga americana,Forest Generalist,neotrop,foliage glean,insectivore
+6630,Yellow-throated Warbler,Setophaga dominica,Eastern Forest,neotrop,bark glean,insectivore
+6710,Pine Warbler,Setophaga pinus,Eastern Forest,short,bark glean,insct/om
+6730,Prairie Warbler,Setophaga discolor,Eastern Forest,neotrop,foliage glean,insectivore
+6760,Louisiana Waterthrush,Parkesia motacilla,Eastern Forest,neotrop,ground glean,insectivore
+6770,Kentucky Warbler,Geothlypis formosa,Eastern Forest,neotrop,ground glean,insectivore
+6810,Common Yellowthroat,Geothlypis trichas,Habitat Generalist,neotrop,foliage glean,insectivore
+6830,Yellow-breasted Chat,Icteria virens,Eastern Forest,neotrop,foliage glean,insct/om
+6840,Hooded Warbler,Setophaga citrina,Eastern Forest,neotrop,foliage glean,insectivore
+6882,House Sparrow,Passer domesticus,Introduced,resid,ground glean,insct/om
+7030,Northern Mockingbird,Mimus polyglottos,Habitat Generalist,resid,ground glean,insectivore
+7040,Gray Catbird,Dumetella carolinensis,Eastern Forest,neotrop,ground glean,insct/om
+7050,Brown Thrasher,Toxostoma rufum,Eastern Forest,short,ground glean,omnivore
+7180,Carolina Wren,Thryothorus ludovicianus,Eastern Forest,resid,ground glean,insectivore
+7210,House Wren,Troglodytes aedon,Forest Generalist,neotrop,ground glean,insectivore
+7270,White-breasted Nuthatch,Sitta carolinensis,Forest Generalist,resid,bark glean,insectivore
+7310,Tufted Titmouse,Baeolophus bicolor,Eastern Forest,resid,foliage glean,insectivore
+7360,Carolina Chickadee,Poecile carolinensis,Eastern Forest,resid,foliage glean,insectivore
+7510,Blue-gray Gnatcatcher,Polioptila caerulea,Habitat Generalist,neotrop,foliage glean,insectivore
+7550,Wood Thrush,Hylocichla mustelina,Eastern Forest,neotrop,ground glean,insectivore
+7610,American Robin,Turdus migratorius,Forest Generalist,short,ground glean,insct/om
+7660,Eastern Bluebird,Sialia sialis,Eastern Forest,short,hawks,insectivore
+22860,Eurasian Collared-Dove,Streptopelia decaocto,Introduced,resid,ground glean,granivore
+3100,Wild Turkey,Meleagris gallopavo,Forest Generalist,resid,ground glean,omnivore
+6140,Tree Swallow,Tachycineta bicolor,Habitat Generalist,short,aerial foraging,insectivore
+6410,Blue-winged Warbler,Vermivora cyanoptera,Eastern Forest,neotrop,foliage glean,insectivore
+6740,Ovenbird,Seiurus aurocapilla,Eastern Forest,neotrop,ground glean,insectivore
+6870,American Redstart,Setophaga ruticilla,Eastern Forest,neotrop,hover/glean,insectivore
+6360,Black-and-white Warbler,Mniotilta varia,Eastern Forest,neotrop,bark glean,insectivore
+6380,Swainson's Warbler,Limnothlypis swainsonii,Eastern Forest,neotrop,ground glean,insectivore
+7290,Brown-headed Nuthatch,Sitta pusilla,Eastern Forest,resid,bark glean,insectivore
+4900,Fish Crow,Corvus ossifragus,Habitat Generalist,short,ground glean,omnivore
+6290,Blue-headed Vireo,Vireo solitarius,Boreal Forest,neotrop,foliage glean,insectivore
+6370,Prothonotary Warbler,Protonotaria citrea,Eastern Forest,neotrop,bark glean,insectivore
+6390,Worm-eating Warbler,Helmitheros vermivorum,Eastern Forest,neotrop,foliage glean,insectivore
+6520,Yellow Warbler,Setophaga petechia,Forest Generalist,neotrop,foliage glean,insectivore
+5520,Lark Sparrow,Chondestes grammacus,Grassland,neotrop,ground glean,insct/om
+3200,Common Ground-Dove,Columbina passerina,Aridlands,resid,ground glean,granivore
+5750,Bachman's Sparrow,Peucaea aestivalis,Eastern Forest,short,ground glean,insct/om
+3950,Red-cockaded Woodpecker,Dryobates borealis,Eastern Forest,resid,bark glean,insectivore
+6670,Black-throated Green Warbler,Setophaga virens,Boreal Forest,neotrop,foliage glean,insectivore
+4450,Gray Kingbird,Tyrannus dominicensis,Eastern Forest,neotrop,hawks,insectivore
+5130,Boat-tailed Grackle,Quiscalus major,Wetland,resid,ground glean,omnivore
+5500,Seaside Sparrow,Ammospiza maritima,Coasts,short,ground glean,insct/om
+7250,Marsh Wren,Cistothorus palustris,Wetland,short,ground glean,insectivore
+4030,Red-breasted Sapsucker,Sphyrapicus ruber,Western Forest,short,bark glean,insectivore
+4330,Rufous Hummingbird,Selasphorus rufus,Western Forest,neotrop,hover/glean,nectarivore
+4641,Pacific-slope Flycatcher,Empidonax difficilis,Western Forest,neotrop,hawks,insectivore
+4661,Alder Flycatcher,Empidonax alnorum,Boreal Forest,neotrop,hawks,insectivore
+4680,Hammond's Flycatcher,Empidonax hammondii,Western Forest,neotrop,hawks,insectivore
+4780,Steller's Jay,Cyanocitta stelleri,Western Forest,resid,ground glean,omnivore
+4860,Common Raven,Corvus corax,Habitat Generalist,resid,ground glean,omnivore
+4890,Northwestern Crow,Corvus caurinus,Western Forest,resid,ground glean,omnivore
+5210,Red Crossbill,Loxia curvirostra,Forest Generalist,short,foliage glean,granivore
+5220,White-winged Crossbill,Loxia leucoptera,Boreal Forest,short,foliage glean,granivore
+5330,Pine Siskin,Spinus pinus,Forest Generalist,short,foliage glean,granivore
+5420,Savannah Sparrow,Passerculus sandwichensis,Grassland,short,ground glean,insct/om
+5830,Lincoln's Sparrow,Melospiza lincolnii,Boreal Forest,neotrop,ground glean,insct/om
+5850,Fox Sparrow,Passerella iliaca,Forest Generalist,short,ground glean,insct/om
+6150,Violet-green Swallow,Tachycineta thalassina,Western Forest,neotrop,aerial foraging,insectivore
+6160,Bank Swallow,Riparia riparia,Habitat Generalist,neotrop,aerial foraging,insectivore
+6270,Warbling Vireo,Vireo gilvus,Forest Generalist,neotrop,foliage glean,insectivore
+6460,Orange-crowned Warbler,Oreothlypis celata,Forest Generalist,neotrop,foliage glean,insectivore
+6680,Townsend's Warbler,Setophaga townsendi,Western Forest,neotrop,foliage glean,insectivore
+6850,Wilson's Warbler,Cardellina pusilla,Forest Generalist,neotrop,foliage glean,insectivore
+7410,Chestnut-backed Chickadee,Poecile rufescens,Western Forest,resid,foliage glean,insectivore
+7480,Golden-crowned Kinglet,Regulus satrapa,Forest Generalist,short,foliage glean,insectivore
+7490,Ruby-crowned Kinglet,Regulus calendula,Boreal Forest,short,foliage glean,insectivore
+7580,Swainson's Thrush,Catharus ustulatus,Forest Generalist,neotrop,foliage glean,insectivore
+7590,Hermit Thrush,Catharus guttatus,Forest Generalist,short,ground glean,insectivore
+7630,Varied Thrush,Ixoreus naevius,Western Forest,short,ground glean,insct/om
+4590,Olive-sided Flycatcher,Contopus cooperi,Forest Generalist,neotrop,hawks,insectivore
+4620,Western Wood-Pewee,Contopus sordidulus,Western Forest,neotrop,hawks,insectivore
+5150,Pine Grosbeak,Pinicola enucleator,Boreal Forest,short,foliage glean,granivore
+6550,Yellow-rumped Warbler,Setophaga coronata,Forest Generalist,short,foliage glean,insectivore
+6800,MacGillivray's Warbler,Geothlypis tolmiei,Western Forest,neotrop,foliage glean,insectivore
+7260,Brown Creeper,Certhia americana,Forest Generalist,short,bark glean,insectivore
+2980,Spruce Grouse,Falcipennis canadensis,Boreal Forest,resid,ground glean,herbivore
+3010,Willow Ptarmigan,Lagopus lagopus,Arctic Tundra,resid,ground glean,herbivore
+2881,Gray Partridge,Perdix perdix,Introduced,resid,ground glean,granivore
+3091,Ring-necked Pheasant,Phasianus colchicus,Introduced,resid,ground glean,omnivore
+4470,Western Kingbird,Tyrannus verticalis,Grassland,neotrop,hawks,insectivore
+4670,Least Flycatcher,Empidonax minimus,Eastern Forest,neotrop,hover/glean,insectivore
+4750,Black-billed Magpie,Pica hudsonia,Habitat Generalist,resid,ground glean,omnivore
+4970,Yellow-headed Blackbird,Xanthocephalus xanthocephalus,Wetland,neotrop,ground glean,insectivore
+5011,Western Meadowlark,Sturnella neglecta,Grassland,short,ground glean,insct/om
+5070,Baltimore Oriole,Icterus galbula,Eastern Forest,neotrop,foliage glean,insectivore
+5100,Brewer's Blackbird,Euphagus cyanocephalus,Habitat Generalist,short,ground glean,insectivore
+5380,Chestnut-collared Longspur,Calcarius ornatus,Grassland,short,ground glean,insct/om
+5400,Vesper Sparrow,Pooecetes gramineus,Grassland,short,ground glean,insct/om
+5450,Baird's Sparrow,Centronyx bairdii,Grassland,neotrop,ground glean,insct/om
+5610,Clay-colored Sparrow,Spizella pallida,Grassland,neotrop,ground glean,insct/om
+6050,Lark Bunting,Calamospiza melanocorys,Grassland,neotrop,ground glean,insct/om
+5480,LeConte's Sparrow,Ammospiza leconteii,Grassland,short,ground glean,insct/om
+7000,Sprague's Pipit,Anthus spragueii,Grassland,short,ground glean,insectivore
+7680,Mountain Bluebird,Sialia currucoides,Western Forest,short,swoops,insectivore
+5390,McCown's Longspur,Rhynchophanes mccownii,Grassland,short,ground glean,insct/om
+5620,Brewer's Sparrow,Spizella breweri,Aridlands,neotrop,ground glean,insct/om
+3000,Ruffed Grouse,Bonasa umbellus,Forest Generalist,resid,ground glean,omnivore
+4021,Red-naped Sapsucker,Sphyrapicus nuchalis,Western Forest,short,bark glean,insectivore
+4640,Cordilleran Flycatcher,Empidonax occidentalis,Western Forest,neotrop,hawks,insectivore
+4660,Willow Flycatcher,Empidonax traillii,Eastern Forest,neotrop,hawks,insectivore
+4690,Dusky Flycatcher,Empidonax oberholseri,Western Forest,neotrop,hawks,insectivore
+4840,Canada Jay,Perisoreus canadensis,Boreal Forest,resid,ground glean,omnivore
+5540,White-crowned Sparrow,Zonotrichia leucophrys,Habitat Generalist,short,ground glean,insct/om
+5990,Lazuli Bunting,Passerina amoena,Western Forest,neotrop,ground glean,insct/om
+6470,Tennessee Warbler,Oreothlypis peregrina,Boreal Forest,neotrop,foliage glean,insectivore
+6750,Northern Waterthrush,Parkesia noveboracensis,Boreal Forest,neotrop,ground glean,insectivore
+7280,Red-breasted Nuthatch,Sitta canadensis,Forest Generalist,short,bark glean,insectivore
+7350,Black-capped Chickadee,Poecile atricapillus,Forest Generalist,resid,foliage glean,insectivore
+7380,Mountain Chickadee,Poecile gambeli,Western Forest,resid,foliage glean,insectivore
+7540,Townsend's Solitaire,Myadestes townsendi,Western Forest,short,hawks,insectivore
+4010,American Three-toed Woodpecker,Picoides dorsalis,Boreal Forest,resid,bark glean,insectivore
+4910,Clark's Nutcracker,Nucifraga columbiana,Western Forest,resid,foliage glean,omnivore
+6610,Blackpoll Warbler,Setophaga striata,Boreal Forest,neotrop,foliage glean,insectivore
+7400,Boreal Chickadee,Poecile hudsonicus,Boreal Forest,resid,foliage glean,insectivore
+5950,Rose-breasted Grosbeak,Pheucticus ludovicianus,Eastern Forest,neotrop,foliage glean,insectivore
+7560,Veery,Catharus fuscescens,Forest Generalist,neotrop,ground glean,insectivore
+4020,Yellow-bellied Sapsucker,Sphyrapicus varius,Eastern Forest,short,bark glean,insectivore
+5580,White-throated Sparrow,Zonotrichia albicollis,Boreal Forest,short,ground glean,insct/om
+6260,Philadelphia Vireo,Vireo philadelphicus,Boreal Forest,neotrop,hover/glean,insectivore
+6780,Connecticut Warbler,Oporornis agilis,Boreal Forest,neotrop,ground glean,insectivore
+5140,Evening Grosbeak,Coccothraustes vespertinus,Boreal Forest,short,ground glean,insct/om
+5170,Purple Finch,Haemorhous purpureus,Forest Generalist,short,ground glean,granivore
+5491,Nelson's Sparrow,Ammospiza nelsoni,Wetland,short,ground glean,insct/om
+5840,Swamp Sparrow,Melospiza georgiana,Wetland,short,ground glean,insct/om
+6070,Western Tanager,Piranga ludoviciana,Western Forest,neotrop,foliage glean,insectivore
+6790,Mourning Warbler,Geothlypis philadelphia,Boreal Forest,neotrop,foliage glean,insectivore
+5960,Black-headed Grosbeak,Pheucticus melanocephalus,Western Forest,neotrop,foliage glean,insectivore
+6291,Plumbeous Vireo,Vireo plumbeus,Western Forest,neotrop,foliage glean,insectivore
+3080,Sharp-tailed Grouse,Tympanuchus phasianellus,Grassland,resid,ground glean,herbivore
+4570,Say's Phoebe,Sayornis saya,Habitat Generalist,short,hawks,insectivore
+4940,Bobolink,Dolichonyx oryzivorus,Grassland,neotrop,ground glean,insct/om
+4040,Williamson's Sapsucker,Sphyrapicus thyroideus,Western Forest,short,bark glean,insectivore
+4320,Broad-tailed Hummingbird,Selasphorus platycercus,Western Forest,neotrop,hover/glean,nectarivore
+5180,Cassin's Finch,Haemorhous cassinii,Western Forest,short,ground glean,granivore
+6292,Cassin's Vireo,Vireo cassinii,Western Forest,neotrop,foliage glean,insectivore
+6640,Grace's Warbler,Setophaga graciae,Western Forest,neotrop,foliage glean,insectivore
+7300,Pygmy Nuthatch,Sitta pygmaea,Western Forest,resid,bark glean,insectivore
+7670,Western Bluebird,Sialia mexicana,Western Forest,short,hawks,insectivore
+3850,Greater Roadrunner,Geococcyx californianus,Aridlands,resid,ground glean,insectivore
+4430,Scissor-tailed Flycatcher,Tyrannus forficatus,Grassland,neotrop,hawks,insectivore
+6330,Bell's Vireo,Vireo bellii,Aridlands,neotrop,foliage glean,insectivore
+6580,Cerulean Warbler,Setophaga cerulea,Eastern Forest,neotrop,foliage glean,insectivore
+6010,Painted Bunting,Passerina ciris,Eastern Forest,neotrop,ground glean,insct/om
+4220,Black Swift,Cypseloides niger,Western Forest,neotrop,aerial foraging,insectivore
+5880,Spotted Towhee,Pipilo maculatus,Western Forest,short,ground glean,insct/om
+6450,Nashville Warbler,Oreothlypis ruficapilla,Boreal Forest,neotrop,foliage glean,insectivore
+6650,Black-throated Gray Warbler,Setophaga nigrescens,Western Forest,neotrop,foliage glean,insectivore
+3120,Band-tailed Pigeon,Patagioenas fasciata,Western Forest,neotrop,foliage glean,granivore
+4240,Vaux's Swift,Chaetura vauxi,Western Forest,neotrop,aerial foraging,insectivore
+5080,Bullock's Oriole,Icterus bullockii,Western Forest,neotrop,foliage glean,insectivore
+6570,Magnolia Warbler,Setophaga magnolia,Boreal Forest,neotrop,hover/glean,insectivore
+4360,Calliope Hummingbird,Selasphorus calliope,Western Forest,neotrop,hover/glean,nectarivore
+5090,Rusty Blackbird,Euphagus carolinus,Boreal Forest,short,ground glean,insectivore
+2940,California Quail,Callipepla californica,Aridlands,resid,ground glean,granivore
+4080,Lewis's Woodpecker,Melanerpes lewis,Western Forest,short,hawks,insectivore
+4691,Gray Flycatcher,Empidonax wrightii,Western Forest,neotrop,hawks,insectivore
+7150,Rock Wren,Salpinctes obsoletus,Aridlands,short,ground glean,insectivore
+7190,Bewick's Wren,Thryomanes bewickii,Aridlands,short,ground glean,insectivore
+7430,Bushtit,Psaltriparus minimus,Western Forest,resid,foliage glean,insectivore
+4250,White-throated Swift,Aeronautes saxatalis,Aridlands,neotrop,aerial foraging,insectivore
+2920,Mountain Quail,Oreortyx pictus,Western Forest,resid,ground glean,granivore
+4070,Acorn Woodpecker,Melanerpes formicivorus,Western Forest,resid,bark glean,omnivore
+4540,Ash-throated Flycatcher,Myiarchus cinerascens,Aridlands,neotrop,hover/glean,insectivore
+4580,Black Phoebe,Sayornis nigricans,Wetland,resid,hawks,insectivore
+5300,Lesser Goldfinch,Spinus psaltria,Western Forest,short,foliage glean,granivore
+6320,Hutton's Vireo,Vireo huttoni,Western Forest,resid,foliage glean,insectivore
+7420,Wrentit,Chamaea fasciata,Aridlands,resid,foliage glean,insectivore
+4310,Anna's Hummingbird,Calypte anna,Aridlands,resid,hover/glean,nectarivore
+5911,California Towhee,Melozone crissalis,Aridlands,resid,ground glean,insct/om
+6690,Hermit Warbler,Setophaga occidentalis,Western Forest,neotrop,foliage glean,insectivore
+7100,California Thrasher,Toxostoma redivivum,Aridlands,resid,ground glean,insectivore
+7020,Sage Thrasher,Oreoscoptes montanus,Aridlands,short,ground glean,insectivore
+7170,Canyon Wren,Catherpes mexicanus,Aridlands,resid,ground glean,insectivore
+3990,White-headed Woodpecker,Dryobates albolarvatus,Western Forest,resid,bark glean,insectivore
+5730,Black-throated Sparrow,Amphispiza bilineata,Aridlands,short,ground glean,insct/om
+7330,Oak Titmouse,Baeolophus inornatus,Western Forest,resid,foliage glean,insectivore
+5120,Great-tailed Grackle,Quiscalus mexicanus,Habitat Generalist,resid,ground glean,omnivore
+4000,Black-backed Woodpecker,Picoides arcticus,Boreal Forest,resid,bark glean,insectivore
+5900,Green-tailed Towhee,Pipilo chlorurus,Aridlands,neotrop,ground glean,insct/om
+3090,Greater Sage-Grouse,Centrocercus urophasianus,Aridlands,resid,ground glean,herbivore
+3089,Gunnison's Sage-Grouse,Centrocercus minimus,Aridlands,resid,ground glean,herbivore
+4920,Pinyon Jay,Gymnorhinus cyanocephalus,Western Forest,resid,ground glean,omnivore
+7331,Juniper Titmouse,Baeolophus ridgwayi,Western Forest,resid,foliage glean,insct/om
+6440,Virginia's Warbler,Oreothlypis virginiae,Western Forest,neotrop,ground glean,insectivore
+4290,Black-chinned Hummingbird,Archilochus alexandri,Western Forest,neotrop,hover/glean,nectarivore
+6970,American Pipit,Anthus rubescens,Arctic Tundra,neotrop,ground glean,insectivore
+2970,Dusky Grouse,Dendragapus obscurus,Western Forest,resid,ground glean,herbivore
+2971,Sooty Grouse,Dendragapus fuliginosus,Western Forest,resid,ground glean,herbivore
+5780,Cassin's Sparrow,Peucaea cassinii,Grassland,short,ground glean,insct/om
+4480,Cassin's Kingbird,Tyrannus vociferans,Western Forest,neotrop,hawks,insectivore
+3880,Black-billed Cuckoo,Coccyzus erythropthalmus,Eastern Forest,neotrop,foliage glean,insectivore
+6590,Chestnut-sided Warbler,Setophaga pensylvanica,Eastern Forest,neotrop,foliage glean,insct/om
+6540,Black-throated Blue Warbler,Setophaga caerulescens,Boreal Forest,neotrop,hover/glean,insectivore
+6860,Canada Warbler,Cardellina canadensis,Boreal Forest,neotrop,hover/glean,insectivore
+6620,Blackburnian Warbler,Setophaga fusca,Boreal Forest,neotrop,foliage glean,insct/om
+2882,Chukar,Alectoris chukar,Introduced,resid,ground glean,granivore
+2950,Gambel's Quail,Callipepla gambelii,Aridlands,resid,ground glean,granivore
+7240,Sedge Wren,Cistothorus platensis,Grassland,short,ground glean,insectivore
+6883,Eurasian Tree Sparrow,Passer montanus,Introduced,resid,ground glean,insct/om
+5470,Henslow's Sparrow,Centronyx henslowii,Grassland,short,ground glean,insct/om
+3190,White-winged Dove,Zenaida asiatica,Aridlands,short,ground glean,granivore
+3050,Greater Prairie-Chicken,Tympanuchus cupido,Grassland,resid,ground glean,granivore
+4630,Yellow-bellied Flycatcher,Empidonax flaviventris,Boreal Forest,neotrop,hawks,insectivore
+6600,Bay-breasted Warbler,Setophaga castanea,Boreal Forest,neotrop,foliage glean,insectivore
+6720,Palm Warbler,Setophaga palmarum,Boreal Forest,neotrop,ground glean,insectivore
+6500,Cape May Warbler,Setophaga tigrina,Boreal Forest,neotrop,foliage glean,insectivore
+6420,Golden-winged Warbler,Vermivora chrysoptera,Eastern Forest,neotrop,foliage glean,insectivore
+2930,Scaled Quail,Callipepla squamata,Aridlands,resid,ground glean,granivore
+3960,Ladder-backed Woodpecker,Dryobates scalaris,Aridlands,resid,bark glean,insectivore
+5040,Scott's Oriole,Icterus parisorum,Western Forest,neotrop,foliage glean,insct/om
+5650,Black-chinned Sparrow,Spizella atrogularis,Aridlands,short,ground glean,insct/om
+5910,Canyon Towhee,Melozone fusca,Aridlands,resid,ground glean,insct/om
+6090,Hepatic Tanager,Piranga flava,Western Forest,neotrop,foliage glean,insct/om
+6340,Gray Vireo,Vireo vicinior,Western Forest,neotrop,foliage glean,insectivore
+7070,Curve-billed Thrasher,Toxostoma curvirostre,Aridlands,short,ground glean,insectivore
+4870,Chihuahuan Raven,Corvus cryptoleucus,Aridlands,resid,ground glean,omnivore
+7130,Cactus Wren,Campylorhynchus brunneicapillus,Aridlands,resid,ground glean,insectivore
+7080,Bendire's Thrasher,Toxostoma bendirei,Aridlands,short,ground glean,insectivore
+4812,California Scrub-Jay,Aphelocoma californica,Western Forest,resid,ground glean,omnivore
+4813,Woodhouse's Scrub-Jay,Aphelocoma woodhouseii,Western Forest,resid,ground glean,omnivore
+7571,Bicknell's Thrush,Catharus bicknelli,Boreal Forest,neotrop,ground glean,insectivore
+5920,Abert's Towhee,Melozone aberti,Aridlands,resid,ground glean,insct/om
+6430,Lucy's Warbler,Oreothlypis luciae,Aridlands,short,foliage glean,insectivore
+7120,Crissal Thrasher,Toxostoma crissale,Aridlands,resid,ground glean,insectivore
+7460,Verdin,Auriparus flaviceps,Aridlands,resid,foliage glean,insectivore
+7520,Black-tailed Gnatcatcher,Polioptila melanura,Aridlands,resid,foliage glean,insectivore

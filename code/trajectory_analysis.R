@@ -1,5 +1,5 @@
 ### Community trajectory analysis
-## Compare 1970-2016 to 1990-2016
+## 1990-2016
 ## Scale model
 
 library(tidyverse)
@@ -446,16 +446,6 @@ scale_model_variables <- read.csv("data/derived_data/scale_model_input.csv", str
   group_by(scale) %>%
   nest()
 
-ggplot(scale_model_variables_unnest, aes(x = scale, y = dir_all, col = focal_rte, group = focal_rte)) + 
-  geom_line(alpha = 0.1) + labs(x = "Scale (routes)", y = "Directionality (all spp.)", col = "Stateroute")
-ggsave("figures/directionality_scale.pdf")
-
-ggplot(filter(scale_model_variables_unnest, scale == 25), aes(x = dir_all, y = dir_core)) + 
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1) +
-  labs(x = "Directionality (all spp.)", y = "Directionality (excl. transients)", title = "25 routes")
-ggsave("figures/directionality_all_vs_core_25.pdf")
-
 scale_model_output <- data.frame(scale = c(), part1 = c(), part2 = c(), joined = c(), unexpl = c())
 for(i in 1:25) {
   model_input <- scale_model_variables$data[[i]]
@@ -478,15 +468,6 @@ for(i in 1:25) {
                    joined = joined, unexpl = unexpl))
 }
 
-mod1.r2 <- summary(mod1)$r.squared
-mod2.r2 <- summary(mod2)$r.squared
-mod12.r2 <- summary(mod12)$r.squared
-
-part1 <- mod12.r2 - mod2.r2 # climate alone
-part2 <- mod12.r2 - mod1.r2 # land cover alone
-joined <- mod1.r2 - part1 # shared variance
-unexpl <- 1 - mod12.r2 # unexplained variance
-
 # write.csv(scale_model_output, "data/derived_data/scale_model_output_variance.csv", row.names = F)
 scale_model_output <- read.csv("data/derived_data/scale_model_output_variance.csv")
 
@@ -507,7 +488,8 @@ scale_model_variables <-  read.csv("data/derived_data/scale_model_input.csv", st
   group_by(scale) %>%
   nest()
 
-scale_model_output <- data.frame(scale = c(), part1 = c(), part2 = c(), joined = c(), unexpl = c())
+scale_model_ests <- data.frame(scale = c(), term = c(), estimate = c(), std.error = c(), 
+                                 statistic = c(), p.value = c(), conf_lo = c(), conf_hi = c())
 for(i in 1:25) {
   model_input <- scale_model_variables$data[[i]]
   
@@ -518,45 +500,69 @@ for(i in 1:25) {
            conf_lo = confint(mod12)[, 1],
            conf_hi = confint(mod12)[, 2])
   
-  scale_model_output <- rbind(scale_model_output, 
+  scale_model_ests <- rbind(scale_model_ests, 
                               tidy_mod)
 }
 
-LC <- ggplot(filter(scale_model_output, term == "max_lc"), aes(x = scale, y = estimate)) + 
-  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
-  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
-  labs(x = "Scale", y = "Effect of change in max land cover")
+# Compare effect estimates w/ beta regression
 
-tmax <- ggplot(filter(scale_model_output, term == "trend_tmax"), aes(x = scale, y = estimate)) + 
-  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
-  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
-  labs(x = "Scale", y = "Effect of trend in Tmax")
-
-tmin <- ggplot(filter(scale_model_output, term == "trend_tmin"), aes(x = scale, y = estimate)) + 
-  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
-  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
-  labs(x = "Scale", y = "Effect of trend in Tmin")
-
-plot_grid(tmax, tmin, LC, nrow = 2)
-ggsave("figures/scale_model_effect_ests.pdf", units = "in", height = 9, width = 12)
-
-## Scale model partial effects plots
-
-pdf("figures/scale_model_tmax_effects.pdf")
-for(scale in scale_model_variables$scale) {
-  df <- scale_model_variables$data[[scale]]
-  print(ggplot(df, aes(x = trend_tmax, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
-          labs(title = paste0("Routes = ", scale)))
+scale_model_output_beta <- data.frame(scale = c(), term = c(), estimate = c(), std.error = c(), 
+                                      statistic = c(), p.value = c(), 
+                                      component = c())
+for(i in 1:25) {
+  model_input <- scale_model_variables$data[[i]]
+  
+  mod12 <- betareg(dir_core ~ trend_tmax + trend_tmin + max_lc, data = model_input)
+  
+  tidy_mod <- tidy(mod12) %>%
+    mutate(scale = i)
+  
+  scale_model_output_beta <- rbind(scale_model_output_beta, 
+                              tidy_mod)
 }
-dev.off()
 
-pdf("figures/scale_model_tmin_effects.pdf")
-for(scale in scale_model_variables$scale) {
-  df <- scale_model_variables$data[[scale]]
-  print(ggplot(df, aes(x = trend_tmin, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
-          labs(title = paste0("Routes = ", scale)))
+mod_compare <- scale_model_ests %>%
+  left_join(scale_model_output_beta, by = c("scale", "term"), suffix = c("_lm", "_beta")) %>%
+  filter(term != "(Intercept)")
+
+ggplot(mod_compare, aes(x = estimate_lm, y = estimate_beta)) + geom_point() + geom_abline(slope = 1, intercept= 0) +
+  facet_wrap(~term) + labs(x = "LM estimate", y = "Betareg estimate")
+ggsave("figures/lm_betareg_ests.pdf", units = "in", height = 4, width = 10)
+
+betareg_r2 <- data.frame(scale = c(), r2 = c())
+for(i in 1:25) {
+  model_input <- scale_model_variables$data[[i]]
+  
+  mod12 <- betareg(dir_core ~ trend_tmax + trend_tmin + max_lc, data = model_input)
+  
+  tidy_mod <- data.frame(r2 = summary(mod12)$pseudo.r.squared) %>%
+    mutate(scale = i)
+  
+  betareg_r2 <- rbind(betareg_r2, 
+                                   tidy_mod)
 }
-dev.off()
+
+r2_compare <- scale_model_output %>%
+  left_join(betareg_r2) %>%
+  mutate(expl = 1 - unexpl)
+
+ggplot(r2_compare, aes(x = expl, y = r2)) + geom_point() + geom_abline(slope = 1, intercept = 0) +
+  labs(x = "Linear model total R2", y = "Betareg total R2")
+ggsave("figures/lm_betareg_r2.pdf")
+
+# Compare distance between routes with directionality
+
+dist_dir_cor <- scale_model_variables_unnest %>%
+  filter(scale == 25) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  left_join(mean_bcr_distances, by = c("bcr", "scale"))
+
+ggplot(dist_dir_cor, aes(x = mean_dist_bcr, y = dir_core)) + geom_point() + 
+  labs(x = "Mean distance between routes", y = "Turnover")
+ggsave("figures/distance_btw_routes_dir.pdf")
+
+mod <- betareg(dir_core ~ mean_dist_bcr, data = dist_dir_cor)
+summary(mod)
 
 #### Scale model with low/no overlap ####
 
@@ -907,43 +913,6 @@ for(i in 1:25) {
                               tidy_mod)
 }
 
-LC <- ggplot(filter(scale_model_output, term == "max_lc"), aes(x = scale, y = estimate)) + 
-  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
-  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
-  labs(x = "Scale", y = "Effect of change in max land cover")
-
-tmax <- ggplot(filter(scale_model_output, term == "trend_tmax"), aes(x = scale, y = estimate)) + 
-  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
-  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
-  labs(x = "Scale", y = "Effect of trend in Tmax")
-
-tmin <- ggplot(filter(scale_model_output, term == "trend_tmin"), aes(x = scale, y = estimate)) + 
-  geom_hline(yintercept = 0, col = "darkgray", lty = 2, cex = 1) +
-  geom_point(cex = 2) + geom_errorbar(aes(ymin = conf_lo, ymax = conf_hi), width = 0) +
-  labs(x = "Scale", y = "Effect of trend in Tmin")
-
-plot_grid(tmax, tmin, LC, nrow = 2)
-ggsave("figures/scale_model_lo_overlap_effect_ests.pdf", units = "in", height = 9, width = 12)
-
-
-## Scale model partial effects plots
-
-pdf("figures/scale_model_lo_overlap_tmax_effects.pdf")
-for(scale in low_overlap_model_variables$scale) {
-  df <- low_overlap_model_variables$data[[scale]]
-  print(ggplot(df, aes(x = trend_tmax, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
-          labs(title = paste0("Routes = ", scale)))
-}
-dev.off()
-
-pdf("figures/scale_model_lo_overlap_tmin_effects.pdf")
-for(scale in low_overlap_model_variables$scale) {
-  df <- low_overlap_model_variables$data[[scale]]
-  print(ggplot(df, aes(x = trend_tmin, y = dir_core)) + geom_point() + geom_smooth(method = "lm", se = F) +
-          labs(title = paste0("Routes = ", scale)))
-}
-dev.off()
-
 #### Map of directionality values ####
 
 dir_sf <- scale_model_variables_unnest %>%
@@ -1028,7 +997,6 @@ dev.off()
 # Regional high leverage species
 
 scale_model_variables_unnest <- read.csv("data/derived_data/scale_model_input.csv", stringsAsFactors = F)
-abund_trends <- read.csv("data/derived_data/BBS_abundance_trends.csv", stringsAsFactors = F)
 low_overlap_focal_routes <- read.csv("data/derived_data/low_overlap_focal_routes.csv")
 
 regional_rtes <- bbs_route_distances %>%
@@ -1044,29 +1012,6 @@ regional_rtes <- bbs_route_distances %>%
   })) %>%
   dplyr::select(-data) %>%
   unnest(grouped_rtes)
-
-regional_abund_trends <- scale_model_variables_unnest %>%
-  filter(focal_rte %in% low_overlap_focal_routes$focal_rte) %>%
-  filter(scale == 25) %>%
-  left_join(regional_rtes) %>%
-  left_join(abund_trends) %>%
-  group_by(focal_rte, dir_all, dir_core, aou) %>%
-  summarize(abund_trend = mean(abundTrend, na.rm = T))
-
-spp_cor <- regional_abund_trends %>%
-  group_by(aou) %>%
-  nest() %>%
-  mutate(n_regions = map_dbl(data, ~nrow(.))) %>%
-  filter(n_regions > 15) %>%
-  mutate(abund_dir_r = map_dbl(data, ~cor(.$dir_core, .$abund_trend))) %>%
-  select(-data) %>%
-  ungroup() %>%
-  left_join(species_list) %>%
-  filter(!grepl("unid.", english_common_name)) %>%
-  arrange(desc(abs(abund_dir_r))) %>%
-  slice(1:10) %>%
-  select(aou, n_regions, abund_dir_r, english_common_name)
-# write.csv(spp_cor, "data/derived_data/high_leverage_spp.csv", row.names = F)
 
 # High leverage species with leave-one-out calculations of directionality (@25 route scales)
 

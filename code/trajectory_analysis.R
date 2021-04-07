@@ -1184,7 +1184,119 @@ nrow(filter(n_regions_tied, n_spp > 1))/nrow(n_regions_tied)
 
 max(n_regions_tied$n_spp)
 
+# Local high leverage species - how well do these match with regional
+
+local_rtes <- bbs_route_distances %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(grouped_rtes = purrr::map(data, ~{
+    df <- .
+    
+    df %>%
+      arrange(distance) %>%
+      slice(1:3) %>%
+      dplyr::select(stateroute)
+  })) %>%
+  dplyr::select(-data) %>%
+  unnest(grouped_rtes)
+
+spp_dir_deltas_local <- local_rtes %>%
+  group_by(focal_rte) %>%
+  nest() %>%
+  mutate(spp_list = map(data, ~{
+    df <- .
+    core_spp %>%
+      filter(stateroute %in% df$stateroute) %>%
+      ungroup() %>%
+      distinct(aou)
+  }),
+  n_spp = map_dbl(spp_list, ~nrow(.))) %>%
+  filter(n_spp > 0) %>%
+  mutate(spp_dir = map2(data, spp_list, ~{
+    routes <- .x
+    spp <- .y
+    spp$excl_dir <- NA
+    
+    for(sp in spp$aou) {
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% routes$stateroute) %>%
+        select(-contains(as.character(sp))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        spp$excl_dir[spp$aou == sp] <- dir_core
+      }
+      
+      else {
+        spp$excl_dir[spp$aou == sp] <- NA
+      }
+    }
+    
+    spp
+    
+  }))
+
+spp_dir_unnest_local <- spp_dir_deltas_local %>%
+  select(-data, -spp_list, -n_spp) %>%
+  unnest(spp_dir)
+# write.csv(spp_dir_unnest_local, "data/derived_data/spec-leave-one-out-directionality-local.csv", row.names = F)
+
+local_dir_core <- scale_model_variables_unnest %>%
+  filter(scale == 3) %>%
+  select(focal_rte, dir_core)
+
+spp_dir_diffs_local <- spp_dir_unnest_local %>%
+  left_join(local_dir_core) %>%
+  mutate(dir_diff = dir_core - excl_dir) %>%
+  filter(dir_diff > 0) %>%
+  group_by(focal_rte) %>%
+  filter(dir_diff == max(dir_diff, na.rm = T)) %>%
+  left_join(fourletter_codes) %>%
+  filter(!is.na(SPEC))
+
+high_impact_spp_local <- spp_dir_diffs_local %>% 
+  group_by(aou) %>% 
+  summarize(n_regions = n()) %>%
+  arrange(desc(n_regions)) %>%
+  left_join(fourletter_codes) %>%
+  filter(!is.na(SPEC))
+# write.csv(high_impact_spp_local, "data/derived_data/spec-LOO-directionality-hi-impact-local.csv", row.names = F)
+
+local_v_regional <- spp_dir_diffs_local %>%
+  left_join(spp_dir_diffs, by = c("focal_rte"), suffix = c('_local', "_regional"))
+ggplot(local_v_regional, aes(x = dir_diff_local, y = dir_diff_regional)) + geom_point() + 
+  geom_abline(slope = 1, intercept = 0) + labs(x = "Directionality impact local", y = "Directionality impact regional")
+ggsave("figures/spp_impacts_local_regional.pdf")
+
+sum(local_v_regional$SPEC_local == local_v_regional$SPEC_regional, na.rm = T)/nrow(local_v_regional)
+# 30% match between local/regional scale
+
+# make local map
+
+top_ten <- high_impact_spp_local %>%
+  slice(1:10)
+
+spp_dir_diffs_map_local <- spp_dir_diffs_local %>%
+  mutate(plot_spp = case_when(aou %in% top_ten$aou ~ COMMONNAME,
+                              TRUE ~ "Other")) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+spp_dir_diffs_map_local$spp_fct <- fct_relevel(as.factor(spp_dir_diffs_map_local$plot_spp),
+                                         "Other", after = Inf)
+
+hi_lev_spp_local <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(spp_dir_diffs_map_local) + tm_bubbles(col = "spp_fct", size = "dir_diff", title.col = "Species", title.size = expression(Delta~Directionality)) +
+  tm_layout(legend.position=c(0.82, 0.02))
+tmap_save(hi_lev_spp_local, "figures/spec-LOO-dir_map_local.pdf")
+
 ### Leave-one-out directionality species guilds ####
+# local and regional scales
 
 guild_core_spp <- core_spp %>%
   left_join(bird_traits, by = c("aou" = "AOU")) %>%
@@ -1210,10 +1322,16 @@ guild_list <- guild_spp_list %>%
   distinct()
 
 # leave one out directionality calculations
+# local and regional scales
+
+local_grped <- local_rtes %>%
+  group_by(focal_rte) %>%
+  nest(data_local = c("stateroute"))
 
 guild_excl_dirs <- regional_rtes %>%
   group_by(focal_rte) %>%
   nest() %>%
+  left_join(local_grped) %>%
   mutate(spp_list = map(data, ~{
     df <- .
     guild_core_spp %>%
@@ -1221,8 +1339,16 @@ guild_excl_dirs <- regional_rtes %>%
       ungroup() %>%
       distinct(aou, Foraging, Trophic.Group, migclass, Breeding.Biome)
   }),
-  n_spp = map_dbl(spp_list, ~nrow(.))) %>%
-  filter(n_spp > 0) %>%
+  spp_list_local = map(data_local, ~{
+    df <- .
+    guild_core_spp %>%
+      filter(stateroute %in% df$stateroute) %>%
+      ungroup() %>%
+      distinct(aou, Foraging, Trophic.Group, migclass, Breeding.Biome)
+  }),
+  n_spp = map_dbl(spp_list, ~nrow(.)),
+  n_spp_local = map_dbl(spp_list_local, ~nrow(.))) %>%
+  filter(n_spp > 0, n_spp_local > 0) %>%
   mutate(forage_dir = map2(data, spp_list, ~{
     r <- .x
     spp <- .y
@@ -1358,7 +1484,146 @@ guild_excl_dirs <- regional_rtes %>%
     
     res
     
+  }),
+  forage_dir_local = map2(data_local, spp_list_local, ~{
+    r <- .x
+    spp <- .y
+    
+    foraging <- unique(spp$Foraging)
+    
+    res <- data.frame(Foraging = foraging, excl_dir = NA)
+    
+    for(sp in foraging) {
+      spec <- spp %>%
+        filter(Foraging == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$Foraging == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$Foraging == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }),
+  trophic_dir_local = map2(data_local, spp_list_local, ~{
+    r <- .x
+    spp <- .y
+    
+    trophic <- unique(spp$Trophic.Group)
+    
+    res <- data.frame(Trophic.Group = trophic, excl_dir = NA)
+    
+    for(sp in trophic) {
+      spec <- spp %>%
+        filter(Trophic.Group == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$Trophic.Group == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$Trophic.Group == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }),
+  mig_dir_local = map2(data_local, spp_list_local, ~{
+    r <- .x
+    spp <- .y
+    
+    migclass <- unique(spp$migclass)
+    
+    res <- data.frame(migclass = migclass, excl_dir = NA)
+    
+    for(sp in migclass) {
+      spec <- spp %>%
+        filter(migclass == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$migclass == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$migclass == sp] <- NA
+      }
+    }
+    
+    res
+    
+  }),
+  nesting_dir_local = map2(data_local, spp_list_local, ~{
+    r <- .x
+    spp <- .y
+    
+    nesting <- unique(spp$Breeding.Biome)
+    
+    res <- data.frame(Breeding.Biome = nesting, excl_dir = NA)
+    
+    for(sp in nesting) {
+      spec <- spp %>%
+        filter(Breeding.Biome == sp)
+      
+      log_core <- log_abund_core %>%
+        filter(stateroute %in% r$stateroute) %>%
+        select(-c(contains(as.character(spec$aou)))) %>%
+        group_by(year_bin) %>%
+        summarize_all(mean, na.rm = T) %>%
+        dplyr::select(-stateroute)
+      
+      if(nrow(log_core) > 3) {
+        abund_dist_core <- dist(log_core[, -1])
+        dir_core <- trajectoryDirectionality(abund_dist_core, sites = rep(1, nrow(log_core)), surveys = log_core$year_bin)
+        
+        res$excl_dir[res$Breeding.Biome == sp] <- dir_core
+      }
+      
+      else {
+        res$excl_dir[res$Breeding.Biome == sp] <- NA
+      }
+    }
+    
+    res
+    
   }))
+
+all_dir_core <- regional_dir_core %>%
+  left_join(local_dir_core, by = c("focal_rte"), suffix = c("_regional", "_local"))
 
 forage_over5 <- guild_list %>%
   group_by(Foraging) %>%
@@ -1366,10 +1631,11 @@ forage_over5 <- guild_list %>%
   filter(n_spp > 5)
 
 forage_dir_diffs <- guild_excl_dirs %>%
-  select(focal_rte, forage_dir) %>%
-  unnest(forage_dir) %>%
-  left_join(regional_dir_core) %>%
-  mutate(dir_diff = dir_core - excl_dir) %>%
+  select(focal_rte, forage_dir, forage_dir_local) %>%
+  pivot_longer(forage_dir:forage_dir_local, names_to = "scale", values_to = "data") %>%
+  unnest(data) %>%
+  left_join(all_dir_core) %>%
+  mutate(dir_diff = ifelse(scale == "forage_dir", dir_core_regional - excl_dir, dir_core_local - excl_dir)) %>%
   filter(!is.na(Foraging), Foraging %in% forage_over5$Foraging) %>%
   left_join(forage_over5) %>%
   mutate(forage_plot = paste0(str_to_title(Foraging), " (", n_spp, ")"))
@@ -1382,10 +1648,11 @@ trophic_over5 <- guild_list %>%
   filter(n_spp > 5)
 
 trophic_dir_diffs <- guild_excl_dirs %>%
-  select(focal_rte, trophic_dir) %>%
-  unnest(trophic_dir) %>%
-  left_join(regional_dir_core) %>%
-  mutate(dir_diff = dir_core - excl_dir) %>%
+  select(focal_rte, trophic_dir, trophic_dir_local) %>%
+  pivot_longer(trophic_dir:trophic_dir_local, names_to = "scale", values_to = "data") %>%
+  unnest(data) %>%
+  left_join(all_dir_core) %>%
+  mutate(dir_diff = ifelse(scale == "trophic_dir", dir_core_regional - excl_dir, dir_core_local - excl_dir)) %>%
   filter(!is.na(Trophic.Group), Trophic.Group %in% trophic_over5$Trophic.Group) %>%
   left_join(trophic_over5) %>%
   mutate_at(c("Trophic.Group"), ~ifelse(. == "insct/om", "insect/omnivore", .)) %>%
@@ -1399,10 +1666,11 @@ mig_over5 <- guild_list %>%
   filter(n_spp > 5)
 
 mig_dir_diffs <- guild_excl_dirs %>%
-  select(focal_rte, mig_dir) %>%
-  unnest(mig_dir) %>%
-  left_join(regional_dir_core) %>%
-  mutate(dir_diff = dir_core - excl_dir) %>%
+  select(focal_rte, mig_dir, mig_dir_local) %>%
+  pivot_longer(mig_dir:mig_dir_local, names_to = "scale", values_to = "data") %>%
+  unnest(data) %>%
+  left_join(all_dir_core) %>%
+  mutate(dir_diff = ifelse(scale == "mig_dir", dir_core_regional - excl_dir, dir_core_local - excl_dir)) %>%
   filter(!is.na(migclass)) %>%
   left_join(mig_over5) %>%
   mutate_at(c("migclass"), ~case_when(. == "short" ~ "short distance",
@@ -1418,43 +1686,48 @@ hab_over5 <- guild_list %>%
   filter(n_spp > 5)
 
 hab_dir_diffs <- guild_excl_dirs %>%
-  select(focal_rte, nesting_dir) %>%
-  unnest(nesting_dir) %>%
-  left_join(regional_dir_core) %>%
-  mutate(dir_diff = dir_core - excl_dir) %>%
+  select(focal_rte, nesting_dir, nesting_dir_local) %>%
+  pivot_longer(nesting_dir:nesting_dir_local, names_to = "scale", values_to = "data") %>%
+  unnest(data) %>%
+  left_join(all_dir_core) %>%
+  mutate(dir_diff = ifelse(scale == "nesting_dir", dir_core_regional - excl_dir, dir_core_local - excl_dir)) %>%
   filter(!is.na(Breeding.Biome), Breeding.Biome %in% hab_over5$Breeding.Biome) %>%
   left_join(hab_over5) %>%
   mutate(hab_plot = paste0(str_to_title(Breeding.Biome), " (", n_spp, ")"))
 # write.csv(hab_dir_diffs, "data/derived_data/guild_LOO_dir_impact_habitat.csv", row.names = F)
 hab_dir_diffs <- read.csv("data/derived_data/guild_LOO_dir_impact_habitat.csv", stringsAsFactors = F)
 
-foraging_plot <- ggplot(forage_dir_diffs, aes(x = forage_plot, y = dir_diff)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
+foraging_plot <- ggplot(forage_dir_diffs, aes(x = forage_plot, y = dir_diff, fill = scale)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  annotate("segment", x = 2, xend = 2,  y = 0.06, yend = 0.08, arrow = arrow(), size = 2, col = "firebrick") +
-  annotate("text", 1, 0.075, label = "Higher directionality\nincluding group", size = 4.5, col = "firebrick") +
-  labs(x = "Foraging guild", y = "") +
-  coord_flip() 
+  annotate("segment", x = 3, xend = 3,  y = 0.06, yend = 0.08, arrow = arrow(), size = 2, col = "firebrick") +
+  annotate("text", 2, 0.075, label = "Higher directionality\nincluding group", size = 4.5, col = "firebrick") +
+  labs(x = "Foraging guild", y = "", fill = "") +
+  scale_fill_manual(values = c("white", "gray"), labels = c("forage_dir" = "Regional", "forage_dir_local" = "Local")) +
+  theme(legend.position = c(0.8, 0.9)) + coord_flip() 
 
-trophic_plot <- ggplot(trophic_dir_diffs, aes(x = trophic_plot, y = dir_diff)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
+trophic_plot <- ggplot(trophic_dir_diffs, aes(x = trophic_plot, y = dir_diff, fill = scale)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  annotate("segment", x = 2, xend = 2,  y = -0.04, yend = -0.06, arrow = arrow(), size = 2, col = "dodgerblue") +
-  annotate("text", 1, -0.05, label = "Higher directionality\nexcluding group", size = 4.5, col = "dodgerblue") +
-  labs(x = "Trophic group", y = "") +
-  coord_flip() 
+  annotate("segment", x = 2.25, xend = 2.25,  y = -0.04, yend = -0.06, arrow = arrow(), size = 2, col = "dodgerblue") +
+  annotate("text", 1.25, -0.05, label = "Higher directionality\nexcluding group", size = 4.5, col = "dodgerblue") +
+  labs(x = "Trophic group", y = "", fill = "Scale") +
+  scale_fill_manual(values = c("white", "gray"), labels = c("trophic_dir" = "Regional", "trophic_dir_local" = "Local")) +
+  theme(legend.position = "none") + coord_flip() 
 
-mig_plot <- ggplot(mig_dir_diffs, aes(x = mig_plot, y = dir_diff)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
+mig_plot <- ggplot(mig_dir_diffs, aes(x = mig_plot, y = dir_diff, fill= scale)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Migration distance", y = "Directionality impact") +
-  coord_flip() 
+  scale_fill_manual(values = c("white", "gray"), labels = c("mig_dir" = "Regional", "mig_dir_local" = "Local")) +
+  theme(legend.position = "none") + coord_flip() 
 
-hab_plot <- ggplot(hab_dir_diffs, aes(x = hab_plot, y = dir_diff)) +
-  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, fill = "gray") +
+hab_plot <- ggplot(hab_dir_diffs, aes(x = hab_plot, y = dir_diff, fill = scale)) +
+  geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   labs(x = "Breeding biome", y = "Directionality impact") +
-  coord_flip() 
+  scale_fill_manual(values = c("white", "gray"), labels = c("nesting_dir" = "Regional", "nesting_dir_local" = "Local")) +
+  theme(legend.position = "none") + coord_flip() 
 
 plot_grid(trophic_plot, foraging_plot, mig_plot, hab_plot, ncol = 2, 
           labels = c("A", "B", "C", "D"), label_size = 16)

@@ -1128,62 +1128,6 @@ high_impact_spp <- spp_dir_diffs %>%
   filter(!is.na(SPEC))
 # write.csv(high_impact_spp, "data/derived_data/spec-LOO-directionality-hi-impact.csv", row.names = F)
 
-high_impact_spp <- read.csv("data/derived_data/spec-LOO-directionality-hi-impact.csv", stringsAsFactors = F)
-
-top_ten <- high_impact_spp %>%
-  slice(1:10)
-
-spp_dir_diffs_map <- spp_dir_diffs %>%
-  mutate(plot_spp = case_when(aou %in% top_ten$aou ~ COMMONNAME,
-                             TRUE ~ "Other")) %>%
-  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
-  mutate(sign = case_when(SPEC %in% c("CLSW", "EUCD") ~ "POS",
-                          SPEC == "HOFI" & longitude < -75 ~ "POS",
-                          SPEC == "TRES" & latitude < 41 ~ "POS",
-                          TRUE ~ "NEG")) %>%
-  st_as_sf(coords = c("longitude", "latitude"))
-
-spp_dir_diffs_map$spp_fct <- fct_relevel(as.factor(spp_dir_diffs_map$plot_spp),
-                                         "Other", after = Inf)
-
-spp_signs <- spp_dir_diffs_map %>%
-  ungroup() %>%
-  dplyr::select(sign) %>%
-  filter(sign == "POS")
-
-hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(spp_dir_diffs_map) + tm_bubbles(col = "spp_fct", size = "dir_diff", title.col = "Species", title.size = expression(Delta~Directionality)) +
-  tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
-  tm_layout(legend.position=c(0.82, 0.02))
-tmap_save(hi_lev_spp, "figures/spec-LOO-dir_map.pdf")
-
-# To what degree is one species dominant in driving directionality - how many species w/in 15% of max dir_diff value
-
-dominant_spp <- spp_dir_unnest %>%
-  left_join(regional_dir_core) %>%
-  mutate(dir_diff = dir_core - excl_dir) %>%
-  filter(dir_diff > 0) %>%
-  group_by(focal_rte) %>%
-  filter(dir_diff >= max(dir_diff, na.rm = T)-0.15*max(dir_diff, na.rm = T)) %>%
-  left_join(fourletter_codes) %>%
-  filter(!is.na(SPEC))
-
-dominant_spp_list <- dominant_spp %>%
-  group_by(aou) %>% 
-  summarize(n_regions = n()) %>%
-  arrange(desc(n_regions)) %>%
-  left_join(fourletter_codes) %>%
-  filter(!is.na(SPEC))
-# write.csv(dominant_spp_list, "data/derived_data/spec-LOO-hi-directionality-ties.csv", row.names = F)
-
-n_regions_tied <- dominant_spp %>%
-  group_by(focal_rte) %>%
-  summarize(n_spp = n_distinct(aou))
-
-nrow(filter(n_regions_tied, n_spp > 1))/nrow(n_regions_tied)
-
-max(n_regions_tied$n_spp)
-
 # Local high leverage species - how well do these match with regional
 
 local_rtes <- bbs_route_distances %>%
@@ -1246,6 +1190,8 @@ spp_dir_unnest_local <- spp_dir_deltas_local %>%
   unnest(spp_dir)
 # write.csv(spp_dir_unnest_local, "data/derived_data/spec-leave-one-out-directionality-local.csv", row.names = F)
 
+spp_dir_unnest_local <- read.csv("data/derived_data/spec-leave-one-out-directionality-local.csv", stringsAsFactors = F)
+
 local_dir_core <- scale_model_variables_unnest %>%
   filter(scale == 3) %>%
   select(focal_rte, dir_core)
@@ -1276,24 +1222,89 @@ ggsave("figures/spp_impacts_local_regional.pdf")
 sum(local_v_regional$SPEC_local == local_v_regional$SPEC_regional, na.rm = T)/nrow(local_v_regional)
 # 30% match between local/regional scale
 
-# make local map
+# make local & regional maps
 
-top_ten <- high_impact_spp_local %>%
+# get list of combined top tens from local/regional
+
+high_impact_spp <- read.csv("data/derived_data/spec-LOO-directionality-hi-impact.csv", stringsAsFactors = F)
+
+top_ten <- high_impact_spp %>%
   slice(1:10)
 
-spp_dir_diffs_map_local <- spp_dir_diffs_local %>%
-  mutate(plot_spp = case_when(aou %in% top_ten$aou ~ COMMONNAME,
+top_ten_local <- high_impact_spp_local %>%
+  slice(1:10)
+
+top_spp <- top_ten %>%
+  full_join(top_ten_local, 
+            by = c("aou", "SPEC", "COMMONNAME", "SCINAME", "SPEC6", "species_id", "french_common_name", 
+                   "spanish_common_name", "sporder", "family", "genus", "species"), 
+            suffix = c("_regional", "_local")) %>%
+  slice(1:11)
+
+# color palette - gray is "Other"
+
+cols <- RColorBrewer::brewer.pal(12, "Set3")
+
+cols_graylast <- c(cols[cols != "#D9D9D9"], "#D9D9D9")
+
+# regional map
+
+spp_dir_diffs_map <- spp_dir_diffs %>%
+  mutate(plot_spp = case_when(aou %in% top_spp$aou ~ COMMONNAME,
                               TRUE ~ "Other")) %>%
   left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  mutate(sign = case_when(SPEC %in% c("CLSW", "EUCD", "CORA") ~ "POS",
+                          SPEC == "HOFI" & longitude < -75 ~ "POS",
+                          SPEC == "TRES" & latitude < 41 ~ "POS",
+                          TRUE ~ "NEG")) %>%
+  filter(longitude > -130) %>%
+  st_as_sf(coords = c("longitude", "latitude"))
+
+spp_dir_diffs_map$spp_fct <- fct_relevel(as.factor(spp_dir_diffs_map$plot_spp),
+                                         "Other", after = Inf)
+spp_signs <- spp_dir_diffs_map %>%
+  ungroup() %>%
+  dplyr::select(sign) %>%
+  filter(sign == "POS")
+
+hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") + 
+  tm_shape(spp_dir_diffs_map) + tm_bubbles(col = "spp_fct", size = "dir_diff", 
+                                           title.col = "Species", title.size = expression(Delta~Directionality),
+                                           palette = cols_graylast) +
+  tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
+  tm_layout(legend.show = F, main.title = "A")
+
+# local map
+
+spp_dir_diffs_map_local <- spp_dir_diffs_local %>%
+  mutate(plot_spp = case_when(aou %in% top_spp$aou ~ COMMONNAME,
+                              TRUE ~ "Other")) %>%
+  left_join(routes, by = c("focal_rte" = "stateroute")) %>%
+  mutate(sign = case_when(SPEC %in% c("CLSW", "EUCD", "CORA") ~ "POS",
+                          SPEC == "HOFI" & longitude < -75 ~ "POS",
+                          SPEC == "TRES" & latitude < 41 ~ "POS",
+                          TRUE ~ "NEG")) %>%
   st_as_sf(coords = c("longitude", "latitude"))
 
 spp_dir_diffs_map_local$spp_fct <- fct_relevel(as.factor(spp_dir_diffs_map_local$plot_spp),
-                                         "Other", after = Inf)
+                                               "Other", after = Inf)
+
+spp_signs_local <- spp_dir_diffs_map_local %>%
+  ungroup() %>%
+  dplyr::select(sign) %>%
+  filter(sign == "POS")
 
 hi_lev_spp_local <- tm_shape(na) + tm_polygons(col = "gray50") + 
-  tm_shape(spp_dir_diffs_map_local) + tm_bubbles(col = "spp_fct", size = "dir_diff", title.col = "Species", title.size = expression(Delta~Directionality)) +
-  tm_layout(legend.position=c(0.82, 0.02))
-tmap_save(hi_lev_spp_local, "figures/spec-LOO-dir_map_local.pdf")
+  tm_shape(spp_dir_diffs_map_local) + tm_bubbles(col = "spp_fct", size = "dir_diff", 
+                                                 title.col = "Species", title.size = expression(Delta~Directionality),
+                                                 palette = cols_graylast) +
+  tm_shape(spp_signs_local) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
+  tm_layout(legend.position=c(0.82, 0.02), main.title = "B")
+
+# multi-panel
+
+spp_loo_maps <- tmap_arrange(hi_lev_spp, hi_lev_spp_local, ncol = 1)
+tmap_save(spp_loo_maps, "figures/spec-LOO-dir_map.pdf", units = "in", height = 12, width = 9)
 
 ### Leave-one-out directionality species guilds ####
 # local and regional scales

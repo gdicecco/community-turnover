@@ -1272,7 +1272,7 @@ hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") +
                                            title.col = "Species", title.size = expression(Delta~Directionality),
                                            palette = cols_graylast) +
   tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
-  tm_layout(legend.show = F, main.title = "A")
+  tm_layout(legend.show = F, main.title = "B. Scale: regional")
 
 # local map
 
@@ -1299,12 +1299,12 @@ hi_lev_spp_local <- tm_shape(na) + tm_polygons(col = "gray50") +
                                                  title.col = "Species", title.size = expression(Delta~Directionality),
                                                  palette = cols_graylast) +
   tm_shape(spp_signs_local) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
-  tm_layout(legend.position=c(0.82, 0.02), main.title = "B")
+  tm_layout(legend.position=c(0.82, 0.02), main.title = "A. Scale: local")
 
 # multi-panel
 
-spp_loo_maps <- tmap_arrange(hi_lev_spp, hi_lev_spp_local, ncol = 1)
-tmap_save(spp_loo_maps, "figures/spec-LOO-dir_map.pdf", units = "in", height = 12, width = 9)
+spp_loo_maps <- tmap_arrange(hi_lev_spp_local, hi_lev_spp, ncol = 1)
+tmap_save(spp_loo_maps, "figures/spec-LOO-dir_map.pdf", units = "in", height = 11.5, width = 8.25)
 
 ### Leave-one-out directionality species guilds ####
 # local and regional scales

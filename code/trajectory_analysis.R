@@ -21,7 +21,7 @@ theme_set(theme_classic(base_size = 15))
 
 # Append correct BioArk path
 info <- sessionInfo()
-bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
+bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\ad.unc.edu\\bio")
 
 ## North America map
 
@@ -480,7 +480,7 @@ scale_model_plot <- scale_model_output %>%
 all_routes <- ggplot(filter(scale_model_plot, variance != "unexpl"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack", col = "white") +
   scale_fill_manual(values = c("gray", "#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Shared", "Climate", "Land cover")) +
-  labs(x = "Aggregated routes", y = "Variance")
+  labs(x = "Spatial scale (no. of routes)", y = "Variance")
 
 # Scale model predictor effects
 
@@ -882,7 +882,7 @@ LO_scale_model_plot <- LO_scale_model_output %>%
 lo_overlap <- ggplot(filter(LO_scale_model_plot, variance != "unexpl"), aes(x = scale, y = value, fill = variance)) +
   geom_col(position = "stack", width = 0.9, col = "white") +
   scale_fill_manual(values = c("gray", "#92C5DE", "#A6D854"), name = "Variance explained", labels = c("Shared", "Climate", "Land cover")) +
-  labs(x = "Aggregated routes", y = "Variance")
+  labs(x = "Spatial scale (no. of routes)", y = "Variance")
 
 ## Variance partitioning multipanel figure
 legend <- get_legend(all_routes)
@@ -922,7 +922,7 @@ dir_sf <- scale_model_variables_unnest %>%
 
 one_route <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(filter(dir_sf, scale == 1)) + 
-  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_dots(col = "dir_core", title = "Turnover", palette = "YlGnBu", size = 0.3, legend.show = F) +
   tm_layout(main.title = "A", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
             title = "Spatial scale:\n1 route", title.position = c(0.8, 0.1))
 # col breaks: 0.25-0.30, ... 0.5-0.55 by 0.5
@@ -944,14 +944,14 @@ one_route_vals <- dir_sf %>%
 one_legend <- ggplot(one_route_vals, aes(x = dir_core, fill = as.factor(color))) +
   geom_histogram(breaks = seq(0.25, 0.55, by = 0.01)) + 
   scale_fill_manual(values = one_route_cols) +
-  labs(x = "Directionality", y = "Count") + theme(legend.position = "none", 
+  labs(x = "Turnover", y = "Count") + theme(legend.position = "none", 
                                                   panel.background = element_rect(fill = "transparent"), # bg of the panel
                                                   plot.background = element_rect(fill = "transparent", color = NA)) # bg of the plot
 
 
 tf_route <-  tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(filter(dir_sf, scale == 25)) + 
-  tm_dots(col = "dir_core", title = "Directionality", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_dots(col = "dir_core", title = "Turnover", palette = "YlGnBu", size = 0.3, legend.show = F) +
   tm_layout(main.title = "B", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
             title = "Spatial scale:\n25 routes", title.position = c(0.8, 0.1))
 # col breaks: 0.25 to 0.65 by 0.5
@@ -975,7 +975,7 @@ tf_route_vals <- dir_sf %>%
 tf_legend <- ggplot(tf_route_vals, aes(x = dir_core, fill = as.factor(color))) +
   geom_histogram(breaks = seq(0.25, 0.65, by = 0.01)) + 
   scale_fill_manual(values = tf_route_cols) +
-  labs(x = "Directionality", y = "Count") + theme(legend.position = "none",
+  labs(x = "Turnover", y = "Count") + theme(legend.position = "none",
                                                   panel.background = element_rect(fill = "transparent"), # bg of the panel
                                                   plot.background = element_rect(fill = "transparent", color = NA)) # bg of the plot
 
@@ -1269,7 +1269,7 @@ spp_signs <- spp_dir_diffs_map %>%
 
 hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(spp_dir_diffs_map) + tm_bubbles(col = "spp_fct", size = "dir_diff", 
-                                           title.col = "Species", title.size = expression(Delta~Directionality),
+                                           title.col = "Species", title.size = "Turnover impact",
                                            palette = cols_graylast) +
   tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
   tm_layout(legend.show = F, main.title = "B. Scale: regional")
@@ -1296,7 +1296,7 @@ spp_signs_local <- spp_dir_diffs_map_local %>%
 
 hi_lev_spp_local <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(spp_dir_diffs_map_local) + tm_bubbles(col = "spp_fct", size = "dir_diff", 
-                                                 title.col = "Species", title.size = expression(Delta~Directionality),
+                                                 title.col = "Species", title.size = "Turnover impact",
                                                  palette = cols_graylast) +
   tm_shape(spp_signs_local) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
   tm_layout(legend.position=c(0.82, 0.02), main.title = "A. Scale: local")
@@ -1714,30 +1714,30 @@ foraging_plot <- ggplot(forage_dir_diffs, aes(x = forage_plot, y = dir_diff, fil
                geom = "crossbar", width = 0.8, position = position_dodge(width = 0.9), col = "gray50", show.legend = F) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   annotate("segment", x = 3, xend = 3,  y = 0.06, yend = 0.08, arrow = arrow(), size = 2, col = "firebrick") +
-  annotate("text", 2, 0.075, label = "Higher directionality\nincluding group", size = 4.5, col = "firebrick") +
+  annotate("text", 2, 0.075, label = "Higher turnover\nincluding group", size = 5, col = "firebrick") +
   labs(x = "Foraging guild", y = "", fill = "") +
   scale_fill_manual(values = c("skyblue3", "gray"), labels = c("forage_dir" = "Regional", "forage_dir_local" = "Local")) +
-  theme(legend.position = c(0.8, 0.9)) + coord_flip() 
+  theme(legend.position = "none", axis.text = element_text(size = 15), axis.title = element_text(size = 16)) + coord_flip() 
 
 trophic_plot <- ggplot(trophic_dir_diffs, aes(x = trophic_plot, y = dir_diff, fill = scale)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, col = NA) +
   stat_summary(aes(group = scale), fun.y = "median", fun.ymin = "median", fun.ymax = "median",
-               geom = "crossbar", width = 0.8, position = position_dodge(width = 0.9), col = "gray50") +
+               geom = "crossbar", width = 0.8, position = position_dodge(width = 0.9), col = "gray50", show.legend = F) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
   annotate("segment", x = 2.25, xend = 2.25,  y = -0.04, yend = -0.06, arrow = arrow(), size = 2, col = "dodgerblue") +
-  annotate("text", 1.25, -0.05, label = "Higher directionality\nexcluding group", size = 4.5, col = "dodgerblue") +
-  labs(x = "Trophic group", y = "", fill = "Scale") +
+  annotate("text", 1.25, -0.05, label = "Higher turnover\nexcluding group", size = 5, col = "dodgerblue") +
+  labs(x = "Trophic group", y = "", fill = "") +
   scale_fill_manual(values = c("skyblue3", "gray"), labels = c("trophic_dir" = "Regional", "trophic_dir_local" = "Local")) +
-  theme(legend.position = "none") + coord_flip() 
+  theme(legend.position = c(0.2, 0.9), axis.text = element_text(size = 15), axis.title = element_text(size = 16), legend.text = element_text(size = 14)) + coord_flip() 
 
 mig_plot <- ggplot(mig_dir_diffs, aes(x = mig_plot, y = dir_diff, fill= scale)) +
   geom_violin(draw_quantiles = c(0.5), trim = T, scale = "width", cex = 1, col = NA) +
   stat_summary(aes(group = scale), fun.y = "median", fun.ymin = "median", fun.ymax = "median",
                geom = "crossbar", width = 0.8, position = position_dodge(width = 0.9), col = "gray50") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Migration distance", y = "Directionality impact") +
+  labs(x = "Migration distance", y = "Turnover impact") +
   scale_fill_manual(values = c("skyblue3", "gray"), labels = c("mig_dir" = "Regional", "mig_dir_local" = "Local")) +
-  theme(legend.position = "none") + coord_flip() 
+  theme(legend.position = "none", axis.text = element_text(size = 15), axis.title = element_text(size = 16)) + coord_flip() 
 
 # merge forest, remove introduced/wetland groups to simplify hab_plot
 
@@ -1754,13 +1754,13 @@ hab_plot <- ggplot(hab_dir_diffs_few, aes(x = hab_plot_few, y = dir_diff, fill =
   stat_summary(aes(group = scale), fun.y = "median", fun.ymin = "median", fun.ymax = "median",
                geom = "crossbar", width = 0.8, position = position_dodge(width = 0.9), col = "gray50") +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Breeding biome", y = "Directionality impact") +
+  labs(x = "Breeding biome", y = "Turnover impact") +
   scale_fill_manual(values = c("skyblue3", "gray"), labels = c("nesting_dir" = "Regional", "nesting_dir_local" = "Local")) +
-  theme(legend.position = "none") + coord_flip() 
+  theme(legend.position = "none", axis.text = element_text(size = 15), axis.title = element_text(size = 16)) + coord_flip() 
 
 plot_grid(trophic_plot, foraging_plot, mig_plot, hab_plot, ncol = 2, 
           labels = c("A", "B", "C", "D"), label_size = 16)
-ggsave("figures/guild_LOO_directionality.pdf", units = "in", height = 8, width = 12)
+ggsave("figures/guild_LOO_directionality.pdf", units = "in", height = 8, width = 13)
 
 ### Supplemental habitat groups plot with all groups
 

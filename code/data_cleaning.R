@@ -19,7 +19,7 @@ na <- world %>%
 
 # Append correct BioArk path
 info <- sessionInfo()
-bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\BioArk")
+bioark <- ifelse(grepl("apple", info$platform), "/Volumes", "\\\\ad.unc.edu\\bio")
 
 routes <- read.csv(paste0(bioark, "/HurlbertLab/Databases/BBS/2017/bbs_routes_20170712.csv"))
 counts <- read.csv(paste0(bioark, "/HurlbertLab/Databases/BBS/2017/bbs_counts_20170712.csv"))

@@ -15,3 +15,9 @@ This study examines how avian community turnover is predicted by climate and lan
 - `scale_model_input_vars_spatialautocorr.R`: calculates spatial autocorrelation of input anthropogenic change variables
 - `trajectory_sensitivity_analyses.R`: examines how sensitive turnover metric is to species pool, time windows, and other analysis choices
 - `directionality_sim_datasets.R`: explores how turnover metric behaves in different cases with simulated data
+
+### `/figures` contains manuscript figures
+
+### `/data` contains raw data used in analyses
+
+#### `/derived_data` contains data produced by analysis scripts

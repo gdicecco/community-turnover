@@ -20,4 +20,4 @@ This study examines how avian community turnover is predicted by climate and lan
 
 ### `/data` contains raw data used in analyses
 
-#### `/derived_data` contains data produced by analysis scripts
+- `/data/derived_data` contains data produced by analysis scripts

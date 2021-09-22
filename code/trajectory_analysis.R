@@ -234,7 +234,9 @@ mean_pct_overlap <- pct_overlap %>%
 
 bcr <- read_sf(paste0(bioark,"/HurlbertLab/DiCecco/bcr_terrestrial_shape/BCR_Terrestrial_master.shp")) %>%
   filter(BCR %in% bcr_subset$bcr) %>%
-  mutate_at(c("BCR"), ~as.factor(.))
+  mutate_at(c("BCR"), ~as.factor(.)) %>%
+  st_transform(st_crs(na)) %>%
+  st_crop(st_bbox(na))
 
 study_routes <- bbs_subset %>%
   ungroup() %>%
@@ -247,8 +249,41 @@ bcr_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(bcr) + tm_polygons(col = "BCR") +
   tm_shape(study_routes) + tm_dots(col = "black", size = 0.05) + 
   tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
-            inner.margins = c(0.02, 0.05, 0.02, 0.02), legend.position = c("left", "bottom"))
-tmap_save(bcr_map, "figures/bcr_aggregation.pdf", units = "in", height = 6, width = 13)
+            inner.margins = c(0.0, 0.08, 0.0, 0.0), legend.position = c("left", "bottom"),
+            main.title = "A", title.size = 4) +
+  tm_compass(type = "8star", position = c("right", "top")) +
+  tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5)
+
+bcr_22 <- bcr %>%
+  filter(BCR == 22)
+
+na_22 <- na %>%
+  st_transform(st_crs(bcr_22)) %>%
+  st_crop(st_bbox(bcr_22))
+
+rtes_22 <- study_routes %>%
+  st_set_crs(st_crs(bcr)) %>%
+  st_intersection(bcr_22) 
+
+focal_rte <- study_routes %>%
+  filter(stateroute == 34020)
+
+nearest_rte <- study_routes %>%
+  filter(stateroute %in% c(34022, 34070))
+
+agg_panel <- tm_shape(na_22) + tm_polygons(col = "gray50") +
+  tm_shape(bcr_22) + tm_polygons(col = "BCR", legend.show = F) +
+  tm_shape(rtes_22) + tm_dots(col = "black", size = 0.1) + 
+  tm_shape(focal_rte) + tm_symbols(col = "blue", shape = 15, size = 0.2) +
+  tm_shape(nearest_rte) + tm_symbols(col = "purple", shape = 17, size = 0.2) +
+  tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
+            inner.margins = c(0.02, 0.02, 0.02, 0.02), legend.position = c("left", "bottom"),
+            main.title = "B", title.size = 4) +
+  tm_compass(type = "8star", position = c("right", "bottom")) +
+  tm_scale_bar(breaks = c(0, 100, 200), text.size = 0.9)
+
+bcr_panels <- tmap_arrange(bcr_map, agg_panel, nrow = 2)
+tmap_save(bcr_panels, "figures/bcr_aggregation.pdf", units = "in", height = 10, width = 8)
 
 bcr_palette <- tmaptools::get_brewer_pal("Set3", n = 15)
 names(bcr_palette) <- as.factor(unique(bcr$BCR))
@@ -923,6 +958,8 @@ dir_sf <- scale_model_variables_unnest %>%
 one_route <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(filter(dir_sf, scale == 1)) + 
   tm_dots(col = "dir_core", title = "Turnover", palette = "YlGnBu", size = 0.3, legend.show = F) +
+  tm_compass(type = "8star", position = c("right", "top")) +
+  tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5, position = c("left", "top")) +
   tm_layout(main.title = "A", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
             title = "Spatial scale:\n1 route", title.position = c(0.8, 0.1))
 # col breaks: 0.25-0.30, ... 0.5-0.55 by 0.5
@@ -1272,6 +1309,8 @@ hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") +
                                            title.col = "Species", title.size = "Turnover impact",
                                            palette = cols_graylast) +
   tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
+  tm_compass(type = "8star", position = c("left", "top")) +
+  tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5, position = c("left", "bottom")) +
   tm_layout(legend.show = F, main.title = "B. Scale: regional")
 
 # local map
@@ -1305,6 +1344,30 @@ hi_lev_spp_local <- tm_shape(na) + tm_polygons(col = "gray50") +
 
 spp_loo_maps <- tmap_arrange(hi_lev_spp_local, hi_lev_spp, ncol = 1)
 tmap_save(spp_loo_maps, "figures/spec-LOO-dir_map.pdf", units = "in", height = 11.5, width = 8.25)
+
+#### Suppl: hi lev species violins by spp ####
+
+reg_spp <- spp_dir_unnest %>%
+  left_join(fourletter_codes) %>%
+  filter(!is.na(SPEC)) %>%
+  filter(aou %in% top_spp$aou) %>%
+  dplyr::select(focal_rte, aou, SPEC, excl_dir)
+
+local_spp <- spp_dir_unnest_local %>%
+  left_join(fourletter_codes) %>%
+  filter(!is.na(SPEC)) %>%
+  filter(aou %in% top_spp$aou) %>%
+  dplyr::select(focal_rte, aou, SPEC, excl_dir)
+
+loo_viol <- reg_spp %>%
+  left_join(local_spp, by = c("focal_rte", "aou", "SPEC"), suffix = c("_regional", "_local")) %>%
+  pivot_longer(names_to = "scale", values_to = "excl_dir", excl_dir_regional:excl_dir_local)
+
+ggplot(loo_viol, aes(x = fct_reorder(SPEC, excl_dir), y = excl_dir, fill = scale)) + geom_violin(draw_quantiles = c(0.5), trim = F)+ 
+  coord_flip() +
+  labs(x = "Species", y = "Turnover impact", fill = "Scale") +
+  scale_fill_manual(values = c("skyblue3", "gray"), labels = c("excl_dir_regional" = "Regional", "excl_dir_local" = "Local")) +
+ggsave("figures/spp_loo_violins.pdf", units = "in", height = 6, width = 9)
 
 ### Leave-one-out directionality species guilds ####
 # local and regional scales
@@ -1769,7 +1832,7 @@ ggplot(hab_dir_diffs, aes(x = hab_plot, y = dir_diff, fill = scale)) +
   stat_summary(aes(group = scale), fun.y = "median", fun.ymin = "median", fun.ymax = "median",
                geom = "crossbar", width = 0.8, position = position_dodge(width = 0.9), col = "gray50", show.legend = F) +
   geom_hline(yintercept = 0, cex = 1, col = "black", lty = 2) +
-  labs(x = "Breeding biome", y = "Directionality impact", fill = "") +
+  labs(x = "Breeding biome", y = "Turnover impact", fill = "") +
   scale_fill_manual(values = c("skyblue3", "gray"), labels = c("nesting_dir" = "Regional", "nesting_dir_local" = "Local")) +
   theme(legend.position = c(0.8, 0.15)) + coord_flip() 
 ggsave("figures/breeding_LOO_directionality.pdf")
@@ -1818,6 +1881,8 @@ class_change <- ggplot(lc_1route, aes(x = fct_rev(max_lc_class), y = max_lc, fil
 lc_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
+  tm_compass(type = "8star", position = c("left", "top")) +
+  tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5, position = c("left", "bottom")) +
   tm_layout(main.title = "A", title.size = 4, legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 
 color_scale <- data.frame(color = c(1:4), 

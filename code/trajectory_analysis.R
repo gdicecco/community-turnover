@@ -268,14 +268,22 @@ rtes_22 <- study_routes %>%
 focal_rte <- study_routes %>%
   filter(stateroute == 34020)
 
+rtes_focal <- mean_bbs_distances %>%
+  filter(stateroute == 34020, scale == 25)
+
 nearest_rte <- study_routes %>%
-  filter(stateroute %in% c(34022, 34070))
+  filter(stateroute %in% rtes_focal$model_input[[1]]$stateroute) %>%
+  filter(stateroute != 34020)
+
+circle_buffer <- st_buffer(focal_rte, dist = 2.5) %>%
+  st_set_crs(st_crs(focal_rte))
 
 agg_panel <- tm_shape(na_22) + tm_polygons(col = "gray50") +
   tm_shape(bcr_22) + tm_polygons(col = "BCR", legend.show = F) +
   tm_shape(rtes_22) + tm_dots(col = "black", size = 0.1) + 
   tm_shape(focal_rte) + tm_symbols(col = "blue", shape = 15, size = 0.2) +
   tm_shape(nearest_rte) + tm_symbols(col = "purple", shape = 17, size = 0.2) +
+  tm_shape(circle_buffer) + tm_borders(col = "black") +
   tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
             inner.margins = c(0.02, 0.02, 0.02, 0.02), legend.position = c("left", "bottom"),
             main.title = "B", title.size = 4) +

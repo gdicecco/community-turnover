@@ -266,24 +266,52 @@ rtes_22 <- study_routes %>%
   st_intersection(bcr_22) 
 
 focal_rte <- study_routes %>%
-  filter(stateroute == 34020)
+  filter(stateroute == 38029)
 
 rtes_focal <- mean_bbs_distances %>%
-  filter(stateroute == 34020, scale == 25)
+  filter(stateroute == 38029, scale == 25)
 
 nearest_rte <- study_routes %>%
   filter(stateroute %in% rtes_focal$model_input[[1]]$stateroute) %>%
-  filter(stateroute != 34020)
+  filter(stateroute != 38029)
 
-circle_buffer <- st_buffer(focal_rte, dist = 2.5) %>%
+circle_buffer <- st_buffer(focal_rte, dist = 5) %>%
   st_set_crs(st_crs(focal_rte))
+
+focal_rte2 <- study_routes %>%
+  filter(stateroute == 34051) %>%
+  st_set_crs(st_crs(bcr_22))
+
+rtes_focal2 <- mean_bbs_distances %>%
+  filter(stateroute == 34051, scale == 25)
+
+nearest_rte2 <- study_routes %>%
+  filter(stateroute %in% rtes_focal2$model_input[[1]]$stateroute) %>%
+  filter(stateroute != 34051)
+
+circle_buffer2 <- st_buffer(focal_rte2, dist = 2.5) %>%
+  st_set_crs(st_crs(focal_rte2)) %>%
+  st_crop(st_bbox(bcr_22))
+
+focal_rte3 <- study_routes %>%
+  filter(stateroute == 34049)
+
+circle_buffer3 <- st_buffer(focal_rte3, dist = 2.5) %>%
+  st_set_crs(st_crs(focal_rte3))
+
+rtes_22_plot <- rtes_22 %>%
+  filter(!(stateroute %in% nearest_rte2$stateroute))
 
 agg_panel <- tm_shape(na_22) + tm_polygons(col = "gray50") +
   tm_shape(bcr_22) + tm_polygons(col = "BCR", legend.show = F) +
-  tm_shape(rtes_22) + tm_dots(col = "black", size = 0.1) + 
-  tm_shape(focal_rte) + tm_symbols(col = "blue", shape = 15, size = 0.2) +
-  tm_shape(nearest_rte) + tm_symbols(col = "purple", shape = 17, size = 0.2) +
-  tm_shape(circle_buffer) + tm_borders(col = "black") +
+  tm_shape(rtes_22_plot) + tm_dots(col = "black", size = 0.1) + 
+  tm_shape(focal_rte) + tm_symbols(col = "cyan3", shape = 17, size = 1) +
+  tm_shape(nearest_rte) + tm_symbols(col = "cyan3", shape = 19, size = 0.4) +
+  # tm_shape(circle_buffer) + tm_borders(col = "black") +
+  tm_shape(focal_rte2) + tm_symbols(col = "orchid4", shape = 15, size = 1) +
+  tm_shape(nearest_rte2) + tm_symbols(col = "orchid4", shape = 8, size = 0.4) +
+  tm_shape(circle_buffer2) + tm_borders(col = "black") +
+  tm_shape(circle_buffer3) + tm_borders(col = "black", lty = 2) +  
   tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
             inner.margins = c(0.02, 0.02, 0.02, 0.02), legend.position = c("left", "bottom"),
             main.title = "B", title.size = 4) +

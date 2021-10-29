@@ -250,7 +250,7 @@ bcr_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(study_routes) + tm_dots(col = "black", size = 0.05) + 
   tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
             inner.margins = c(0.0, 0.08, 0.0, 0.0), legend.position = c("left", "bottom"),
-            main.title = "A", title.size = 4) +
+            main.title = "(a)", title.size = 4) +
   tm_compass(type = "8star", position = c("right", "top")) +
   tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5)
 
@@ -314,7 +314,7 @@ agg_panel <- tm_shape(na_22) + tm_polygons(col = "gray50") +
   tm_shape(circle_buffer3) + tm_borders(col = "black", lty = 2) +  
   tm_layout(legend.text.size = 1.25, legend.title.size = 1.5, outer.margins = c(0.01,0,0.01,0),
             inner.margins = c(0.02, 0.02, 0.02, 0.02), legend.position = c("left", "bottom"),
-            main.title = "B", title.size = 4) +
+            main.title = "(b)", title.size = 4) +
   tm_compass(type = "8star", position = c("right", "bottom")) +
   tm_scale_bar(breaks = c(0, 100, 200), text.size = 0.9)
 
@@ -959,7 +959,7 @@ lo_overlap <- ggplot(filter(LO_scale_model_plot, variance != "unexpl"), aes(x = 
 legend <- get_legend(all_routes)
 
 plot_grid(all_routes + theme(legend.position = "none"), lo_overlap + theme(legend.position = "none"), legend,
-          ncol = 3, rel_widths = c(0.4, 0.4, 0.2), labels = c("A", "B", ""))
+          ncol = 3, rel_widths = c(0.4, 0.4, 0.2), labels = c("(a)", "(b)", ""))
 ggsave("figures/variance_partitioning_multipanel.pdf", units = "in", height = 5, width = 12)
 
 # Scale model lo overlap predictor effects
@@ -996,7 +996,7 @@ one_route <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_dots(col = "dir_core", title = "Turnover", palette = "YlGnBu", size = 0.3, legend.show = F) +
   tm_compass(type = "8star", position = c("right", "top")) +
   tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5, position = c("left", "top")) +
-  tm_layout(main.title = "A", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
+  tm_layout(main.title = "(a)", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
             title = "Spatial scale:\n1 route", title.position = c(0.8, 0.1))
 # col breaks: 0.25-0.30, ... 0.5-0.55 by 0.5
 # 6 colors
@@ -1025,7 +1025,7 @@ one_legend <- ggplot(one_route_vals, aes(x = dir_core, fill = as.factor(color)))
 tf_route <-  tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(filter(dir_sf, scale == 25)) + 
   tm_dots(col = "dir_core", title = "Turnover", palette = "YlGnBu", size = 0.3, legend.show = F) +
-  tm_layout(main.title = "B", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
+  tm_layout(main.title = "(b)", main.title.size = 1.5, inner.margins = c(0.15, 0.02, 0.02, 0.02),
             title = "Spatial scale:\n25 routes", title.position = c(0.8, 0.1))
 # col breaks: 0.25 to 0.65 by 0.5
 # 8 colors
@@ -1347,7 +1347,7 @@ hi_lev_spp <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(spp_signs) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5, position = c("left", "bottom")) +
-  tm_layout(legend.show = F, main.title = "B. Scale: regional")
+  tm_layout(legend.show = F, main.title = "(b) Scale: regional")
 
 # local map
 
@@ -1374,7 +1374,7 @@ hi_lev_spp_local <- tm_shape(na) + tm_polygons(col = "gray50") +
                                                  title.col = "Species", title.size = "Turnover impact",
                                                  palette = cols_graylast) +
   tm_shape(spp_signs_local) + tm_symbols(shape = 3, size = 0.05, col = "black", alpha = 0.5) +
-  tm_layout(legend.position=c(0.82, 0.02), main.title = "A. Scale: local")
+  tm_layout(legend.position=c(0.82, 0.02), main.title = "(a) Scale: local")
 
 # multi-panel
 
@@ -1858,7 +1858,7 @@ hab_plot <- ggplot(hab_dir_diffs_few, aes(x = hab_plot_few, y = dir_diff, fill =
   theme(legend.position = "none", axis.text = element_text(size = 15), axis.title = element_text(size = 16)) + coord_flip() 
 
 plot_grid(trophic_plot, foraging_plot, mig_plot, hab_plot, ncol = 2, 
-          labels = c("A", "B", "C", "D"), label_size = 16)
+          labels = c("(a)", "(b)", "(c)", "(d)"), label_size = 16)
 ggsave("figures/guild_LOO_directionality.pdf", units = "in", height = 8, width = 13)
 
 ### Supplemental habitat groups plot with all groups
@@ -1909,7 +1909,7 @@ class_change <- ggplot(lc_1route, aes(x = fct_rev(max_lc_class), y = max_lc, fil
   geom_hline(yintercept = 0, lty = 2) +
   theme(legend.position = "none") +
   scale_fill_brewer(palette = "Set3") +
-  labs(x = "", y = "Change in proportion cover", fill = "", title = "B") + 
+  labs(x = "", y = "Change in proportion cover", fill = "", title = "(b)") + 
   coord_flip() +
   theme(plot.title = element_text(size = 18, hjust = -0.25), 
         plot.margin = unit(c(1.25, 0, 0, 0), "cm"))
@@ -1919,7 +1919,7 @@ lc_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_dots(col = "max_lc_class", size = 0.5, title = "Land cover") + 
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 500, 1000), text.size = 1.5, position = c("left", "bottom")) +
-  tm_layout(main.title = "A", title.size = 4, legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
+  tm_layout(main.title = "(a)", title.size = 4, legend.text.size = 1.25, legend.title.size =2, legend.position = c("right", "bottom"), outer.margins = c(0.01,0.01,0.01,0.01))
 
 color_scale <- data.frame(color = c(1:4), 
                           temp_hex = c("#92C5DE", "#FDDBC7", "#EF8A62", "#B2182B"), stringsAsFactors = F)
@@ -1927,7 +1927,7 @@ color_scale <- data.frame(color = c(1:4),
 tmin_map <- tm_shape(na) + tm_polygons(col = "gray50") + 
   tm_shape(lc_1route) + 
   tm_dots(col = "trend_tmin", size = 0.5, title = "Trend in Tmin", breaks = quantile(lc_1route$trend_tmin, na.rm = T), palette = color_scale$temp_hex) + 
-  tm_layout(main.title = "C", title.size = 4, legend.show = F, 
+  tm_layout(main.title = "(c)", title.size = 4, legend.show = F, 
             inner.margins = c(0.12, 0.02, 0.02, 0.02), 
             outer.margins = c(0.01,0.01,0.01,0.01))
 
@@ -1936,7 +1936,7 @@ tmax_map <- tm_shape(na) + tm_polygons(col = "gray50") +
   tm_shape(lc_1route) + 
   tm_dots(col = "trend_tmax", size = 0.5, title = "Trend in Tmax", 
           breaks = quantile(lc_1route$trend_tmax, na.rm = T), palette = color_scale$temp_hex) + 
-  tm_layout(main.title = "D", title.size = 4, legend.show = F, 
+  tm_layout(main.title = "(d)", title.size = 4, legend.show = F, 
             inner.margins = c(0.12, 0.02, 0.02, 0.02), 
             outer.margins = c(0.01,0.01,0.01,0.01))
 
